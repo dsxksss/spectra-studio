@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@hugeicons/react':
+        specifier: ^1.1.4
+        version: 1.1.4(react@18.3.1)
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.9.1
@@ -281,6 +284,11 @@ packages:
     engines: {node: '>=12'}
     cpu: [x64]
     os: [win32]
+
+  '@hugeicons/react@1.1.4':
+    resolution: {integrity: sha512-gsc3eZyd2fGqRUThW9+lfjxxsOkz6KNVmRXRgJjP32GL0OnnLJnl3hytKt47CBbiQj2xE2kCw+rnP3UQCThcKw==}
+    peerDependencies:
+      react: '>=16.0.0'
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1181,6 +1189,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.21.5':
     optional: true
+
+  '@hugeicons/react@1.1.4(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

@@ -21,7 +21,8 @@
         "transparent": true,
         "shadow": false,
         "windowEffects": null,
-        "alwaysOnTop": true
+        "alwaysOnTop": true,
+        "visible": false
       }
     ],
     "security": {
