@@ -15,7 +15,6 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![greet])
     .setup(|app| {
-      // Force set window title to empty to avoid showing URL during drag
       if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_title("");
       }

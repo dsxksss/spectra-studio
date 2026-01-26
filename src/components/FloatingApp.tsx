@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     X,
@@ -10,19 +8,11 @@ import {
     Circle,
     GripVertical
 } from "lucide-react";
-import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function FloatingApp() {
     // Mode: 'toolbar' (default) or 'collapsed' (minimized state)
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const isDraggingRef = useRef(false);
-    const dragStartPosRef = useRef({ x: 0, y: 0 });
-    const windowStartPosRef = useRef({ x: 0, y: 0 });
-
-    useEffect(() => {
-        // Enforce empty title to prevent Windows drag tooltip showing URL
-        document.title = " ";
-    }, []);
 
     const handleMinimize = () => setIsCollapsed(true);
     const handleRestore = () => setIsCollapsed(false);
@@ -31,58 +21,6 @@ export default function FloatingApp() {
         const appWindow = getCurrentWindow();
         await appWindow.close();
     };
-
-    // Custom drag implementation to avoid Windows native drag tooltip
-    const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        try {
-            const appWindow = getCurrentWindow();
-            const position = await appWindow.outerPosition();
-
-            isDraggingRef.current = true;
-            dragStartPosRef.current = { x: e.screenX, y: e.screenY };
-            windowStartPosRef.current = { x: position.x, y: position.y };
-
-            // Add global event listeners
-            document.addEventListener("mousemove", handleMouseMove);
-            document.addEventListener("mouseup", handleMouseUp);
-        } catch (err) {
-            console.error("Failed to start custom drag:", err);
-        }
-    }, []);
-
-    const handleMouseMove = useCallback(async (e: MouseEvent) => {
-        if (!isDraggingRef.current) return;
-
-        try {
-            const appWindow = getCurrentWindow();
-            const deltaX = e.screenX - dragStartPosRef.current.x;
-            const deltaY = e.screenY - dragStartPosRef.current.y;
-
-            const newX = windowStartPosRef.current.x + deltaX;
-            const newY = windowStartPosRef.current.y + deltaY;
-
-            await appWindow.setPosition(new LogicalPosition(newX, newY));
-        } catch (err) {
-            console.error("Failed to move window:", err);
-        }
-    }, []);
-
-    const handleMouseUp = useCallback(() => {
-        isDraggingRef.current = false;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-    }, [handleMouseMove]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            document.removeEventListener("mousemove", handleMouseMove);
-            document.removeEventListener("mouseup", handleMouseUp);
-        };
-    }, [handleMouseMove, handleMouseUp]);
 
     return (
         <div className="flex items-center justify-center w-screen h-screen pointer-events-none">
@@ -114,7 +52,7 @@ export default function FloatingApp() {
                             {/* Drag Area - Full size but behind the center button */}
                             <div
                                 className="absolute inset-0 z-0 cursor-move"
-                                onMouseDown={handleMouseDown}
+                                data-tauri-drag-region
                             />
 
                             {/* Restore Button - Centered, absolute to be on top */}
@@ -138,11 +76,12 @@ export default function FloatingApp() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="flex items-center w-full h-full px-2"
+                            data-tauri-drag-region
                         >
                             {/* 1. Drag Handle */}
                             <div
                                 className="flex items-center justify-center px-2 cursor-move text-gray-500 hover:text-gray-300 transition-colors"
-                                onMouseDown={handleMouseDown}
+                                data-tauri-drag-region
                             >
                                 <GripVertical size={20} className="pointer-events-none" />
                             </div>
