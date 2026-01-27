@@ -1,4 +1,3 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, PhysicalPosition};
 
@@ -13,30 +12,30 @@ fn greet() -> String {
 }
 
 #[tauri::command]
-fn resize_window(window: tauri::Window, width: f64, height: f64, x: f64, y: f64) {
+fn update_click_region(window: tauri::Window, width: f64, height: f64) {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOZORDER, SWP_NOACTIVATE};
+        use windows::Win32::Graphics::Gdi::{CreateRectRgn, SetWindowRgn};
         
-        if let Ok(hwnd) = window.hwnd() {
-             let factor = window.scale_factor().unwrap_or(1.0);
-             let p_x = (x * factor) as i32;
-             let p_y = (y * factor) as i32;
-             let p_w = (width * factor) as i32;
-             let p_h = (height * factor) as i32;
-             
-             #[allow(unsafe_code)]
-             unsafe {
-                 let _ = SetWindowPos(HWND(hwnd.0 as _), None, p_x, p_y, p_w, p_h, SWP_NOZORDER | SWP_NOACTIVATE);
-             }
+        if let (Ok(factor), Ok(win_size)) = (window.scale_factor(), window.inner_size()) {
+            let target_w = (width * factor).round() as i32;
+            let target_h = (height * factor).round() as i32;
+            
+            let max_w = win_size.width as i32;
+            let max_h = win_size.height as i32;
+
+            let rgn_x = max_w - target_w;
+            let rgn_y = max_h - target_h;
+
+            unsafe {
+                let region = CreateRectRgn(rgn_x, rgn_y, max_w, max_h);
+                if let Ok(hwnd) = window.hwnd() {
+                    // 修复：这里使用 Some(region)
+                    let _ = SetWindowRgn(HWND(hwnd.0 as _), Some(region), true);
+                }
+            }
         }
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
-        let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
     }
 }
 
@@ -44,18 +43,28 @@ fn resize_window(window: tauri::Window, width: f64, height: f64, x: f64, y: f64)
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_opener::init())
-    .invoke_handler(tauri::generate_handler![greet, resize_window])
+    .invoke_handler(tauri::generate_handler![greet, update_click_region])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
 
-        // Initial positioning: Bottom Right
         if let Ok(Some(monitor)) = window.current_monitor() {
             let screen_size = monitor.size();
-            let window_size = window.outer_size().unwrap();
             
-            let x = screen_size.width as i32 - window_size.width as i32 - 20;
-            let y = screen_size.height as i32 - window_size.height as i32 - 20;
+            // 设定最大物理尺寸
+            let max_width = 800.0; 
+            let max_height = 600.0;
             
+            let factor = window.scale_factor().unwrap();
+            let p_width = max_width * factor;
+            let p_height = max_height * factor;
+
+            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+                width: p_width as u32, 
+                height: p_height as u32 
+            }));
+
+            let x = screen_size.width as i32 - p_width as i32 - 20;
+            let y = screen_size.height as i32 - p_height as i32 - 20;
             let _ = window.set_position(tauri::Position::Physical(PhysicalPosition { x, y }));
         }
 
@@ -63,10 +72,9 @@ pub fn run() {
         {
             let hwnd_handle = window.hwnd().unwrap();
             let hwnd = windows::Win32::Foundation::HWND(hwnd_handle.0 as _);
+            let dark_mode = 1i32;
             
-            #[allow(unsafe_code)]
             unsafe {
-                let dark_mode = 1i32;
                 let _ = DwmSetWindowAttribute(
                     hwnd,
                     DWMWA_USE_IMMERSIVE_DARK_MODE,
