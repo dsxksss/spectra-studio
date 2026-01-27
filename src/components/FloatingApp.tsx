@@ -8,6 +8,7 @@ import {
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
+import RedisManager from "./RedisManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
 
 // UI 尺寸定义
@@ -204,12 +205,20 @@ export default function FloatingApp() {
             case 'expanded':
                 return (
                     <div className="w-full h-full bg-[#09090b] flex flex-col">
-                        <DatabaseManager
-                            onClose={() => handleChangeMode('toolbar')}
-                            onConnect={(s) => { setConnectedService(s); handleChangeMode('toolbar'); }}
-                            activeService={connectedService}
-                            onDragStart={handleDragStart}
-                        />
+                        {connectedService === 'Redis' ? (
+                            <RedisManager
+                                onClose={() => handleChangeMode('toolbar')}
+                                onDisconnect={() => setConnectedService(null)}
+                                onDragStart={handleDragStart}
+                            />
+                        ) : (
+                            <DatabaseManager
+                                onClose={() => handleChangeMode('toolbar')}
+                                onConnect={(s) => setConnectedService(s)}
+                                activeService={connectedService}
+                                onDragStart={handleDragStart}
+                            />
+                        )}
                     </div>
                 );
             default:

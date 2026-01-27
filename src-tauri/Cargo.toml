@@ -29,6 +29,7 @@ windows = { version = "0.61", features = [
   "Win32_Graphics_Gdi"
 ] }
 raw-window-handle = "0.6"
+redis = { version = "0.27", features = ["tokio-comp"] }
 
 [lints.rust]
 unsafe_code = "warn"

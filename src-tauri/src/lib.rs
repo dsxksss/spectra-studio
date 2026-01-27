@@ -1,12 +1,107 @@
 #![allow(unsafe_code)]
 
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Manager, PhysicalPosition};
+use tauri::{Manager, PhysicalPosition, State};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use std::sync::Mutex;
+
+struct AppState {
+    redis_client: Mutex<Option<redis::Client>>,
+}
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
+
+#[tauri::command]
+async fn connect_redis(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    password: Option<String>,
+) -> Result<String, String> {
+    let url = if let Some(pwd) = password {
+        if pwd.is_empty() {
+            format!("redis://{}:{}/", host, port)
+        } else {
+            format!("redis://:{}@{}:{}/", pwd, host, port)
+        }
+    } else {
+        format!("redis://{}:{}/", host, port)
+    };
+
+    let client = redis::Client::open(url).map_err(|e| e.to_string())?;
+    
+    // Verify connection
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    // Check if alive
+    let _: () = redis::cmd("PING").query_async(&mut con).await.map_err(|e| e.to_string())?;
+
+    *state.redis_client.lock().unwrap() = Some(client);
+    
+    Ok(format!("Connected to {}:{}", host, port))
+}
+
+#[tauri::command]
+async fn redis_get_keys(state: State<'_, AppState>, pattern: String) -> Result<Vec<String>, String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    let keys: Vec<String> = redis::cmd("KEYS").arg(pattern).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    Ok(keys)
+}
+
+#[tauri::command]
+async fn redis_get_value(state: State<'_, AppState>, key: String) -> Result<String, String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    let key_type: String = redis::cmd("TYPE").arg(&key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    
+    match key_type.as_str() {
+        "string" => {
+            let val: String = redis::cmd("GET").arg(&key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+            Ok(val)
+        },
+        "list" => {
+            let val: Vec<String> = redis::cmd("LRANGE").arg(&key).arg(0).arg(-1).query_async(&mut con).await.map_err(|e| e.to_string())?;
+            Ok(serde_json::to_string(&val).map_err(|e| e.to_string())?)
+        },
+         "set" => {
+            let val: Vec<String> = redis::cmd("SMEMBERS").arg(&key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+            Ok(serde_json::to_string(&val).map_err(|e| e.to_string())?)
+        },
+        "hash" => {
+             let val: std::collections::HashMap<String, String> = redis::cmd("HGETALL").arg(&key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+             Ok(serde_json::to_string(&val).map_err(|e| e.to_string())?)
+        },
+        _ => {
+             Ok(format!("Unsupported type: {}", key_type))
+        }
+    }
+}
+
+#[tauri::command]
+async fn redis_set_value(state: State<'_, AppState>, key: String, value: String) -> Result<(), String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    let _: () = redis::cmd("SET").arg(key).arg(value).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 #[tauri::command]
 fn greet() -> String {
@@ -90,7 +185,10 @@ fn get_screen_work_area(window: tauri::Window) -> (i32, i32, i32, i32) {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_opener::init())
-    .invoke_handler(tauri::generate_handler![greet, update_click_region, get_screen_work_area])
+    .manage(AppState {
+        redis_client: Mutex::new(None),
+    })
+    .invoke_handler(tauri::generate_handler![greet, update_click_region, get_screen_work_area, connect_redis, redis_get_keys, redis_get_value, redis_set_value])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
 
