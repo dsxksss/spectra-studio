@@ -5,7 +5,7 @@ import {
     GripVertical,
     Database
 } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
@@ -28,23 +28,110 @@ export default function FloatingApp() {
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
     const isAnimatingRef = useRef(false);
-    const { handlePointerDown: handleDragStart } = useCustomDrag(currentUiSize.w, currentUiSize.h);
+
 
     useEffect(() => {
         // 初始化时设置点击区域为 toolbar 大小
         invoke('update_click_region', {
             width: UI_SIZES.toolbar.w,
-            height: UI_SIZES.toolbar.h
+            height: UI_SIZES.toolbar.h,
+            alignX: 'end',
+            alignY: 'end'
         });
     }, []);
+
+    const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
+
+    const { handlePointerDown: handleDragStart } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
 
     const handleChangeMode = async (targetMode: 'toolbar' | 'collapsed' | 'expanded') => {
         if (targetMode === viewMode || isAnimatingRef.current) return;
 
-        isAnimatingRef.current = true;
         const currentSize = UI_SIZES[viewMode];
         const targetSize = UI_SIZES[targetMode];
         const isExpanding = targetSize.w > currentSize.w || targetSize.h > currentSize.h;
+
+        let newAlignX = layoutAlign.x;
+        let newAlignY = layoutAlign.y;
+
+        if (isExpanding) {
+            try {
+                const appWindow = getCurrentWindow();
+                const factor = await appWindow.scaleFactor();
+                const currentOuterPos = await appWindow.outerPosition();
+                const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+                const [waX, waY, waW, waH] = workArea;
+
+                const winPhysW = UI_SIZES.expanded.w * factor;
+                const winPhysH = UI_SIZES.expanded.h * factor;
+
+                const currentPhysW = currentSize.w * factor;
+                const currentPhysH = currentSize.h * factor;
+
+                // 1. Calculate Visual Top-Left of the CURRENT content (before expansion check)
+                // This depends on the OLD alignment
+                let visualLeft = currentOuterPos.x;
+                let visualTop = currentOuterPos.y;
+
+                if (layoutAlign.x === 'end') {
+                    visualLeft = currentOuterPos.x + (winPhysW - currentPhysW);
+                }
+                if (layoutAlign.y === 'end') {
+                    visualTop = currentOuterPos.y + (winPhysH - currentPhysH);
+                }
+
+                // 2. Determine NEW Desired Alignment based on Quadrant
+                // Center point of visual content
+                const midX = visualLeft + currentPhysW / 2;
+                const midY = visualTop + currentPhysH / 2;
+                const screenMidX = waX + waW / 2;
+                const screenMidY = waY + waH / 2;
+
+                newAlignX = midX < screenMidX ? 'start' : 'end'; // Left side -> Align Start (Expand Right)
+                newAlignY = midY < screenMidY ? 'start' : 'end'; // Top Side -> Align Start (Expand Down)
+
+                // 3. Calculate NEW Window Position to maintain Visual Position
+                let targetWinX = currentOuterPos.x;
+                let targetWinY = currentOuterPos.y;
+
+                if (newAlignX === 'start') {
+                    // If Align Start, Window X = Visual Left
+                    targetWinX = visualLeft;
+                } else {
+                    // If Align End, Window X = Visual Left - (Window W - Content W)
+                    // Note: We use CURRENT content width for the transition point
+                    targetWinX = visualLeft - (winPhysW - currentPhysW);
+                }
+
+                if (newAlignY === 'start') {
+                    targetWinY = visualTop;
+                } else {
+                    targetWinY = visualTop - (winPhysH - currentPhysH);
+                }
+
+                // 4. Safety Bounds Check (Keep Window fully on screen)
+                if (targetWinX < waX) targetWinX = waX;
+                if (targetWinY < waY) targetWinY = waY;
+                if (targetWinX + winPhysW > waX + waW) targetWinX = (waX + waW) - winPhysW;
+                if (targetWinY + winPhysH > waY + waH) targetWinY = (waY + waH) - winPhysH;
+
+                // 5. Apply Changes
+                if (targetWinX !== currentOuterPos.x || targetWinY !== currentOuterPos.y) {
+                    await appWindow.setPosition(new PhysicalPosition(
+                        Math.round(targetWinX),
+                        Math.round(targetWinY)
+                    ));
+                }
+
+                // Update alignment state
+                setLayoutAlign({ x: newAlignX, y: newAlignY });
+
+            } catch (err) {
+                console.error("Failed to adjust window position:", err);
+            }
+        }
+
+        isAnimatingRef.current = true;
 
         setContentOpacity(0);
         await new Promise(r => setTimeout(r, 50));
@@ -53,7 +140,9 @@ export default function FloatingApp() {
             // 变大：先扩大点击区域
             await invoke('update_click_region', {
                 width: targetSize.w,
-                height: targetSize.h
+                height: targetSize.h,
+                alignX: newAlignX,
+                alignY: newAlignY
             });
 
             setVisibleContent(targetMode);
@@ -78,7 +167,9 @@ export default function FloatingApp() {
             setTimeout(async () => {
                 await invoke('update_click_region', {
                     width: targetSize.w,
-                    height: targetSize.h
+                    height: targetSize.h,
+                    alignX: layoutAlign.x,
+                    alignY: layoutAlign.y
                 });
                 isAnimatingRef.current = false;
             }, ANIMATION_DURATION);
@@ -142,8 +233,10 @@ export default function FloatingApp() {
         }
     };
 
+    const containerFlexClass = `fixed inset-0 overflow-hidden pointer-events-none flex ${layoutAlign.y === 'start' ? 'items-start' : 'items-end'} ${layoutAlign.x === 'start' ? 'justify-start' : 'justify-end'}`;
+
     return (
-        <div className="fixed inset-0 overflow-hidden pointer-events-none flex items-end justify-end">
+        <div className={containerFlexClass}>
             <div
                 className="bg-[#18181b] border border-white/10 overflow-hidden shadow-2xl pointer-events-auto"
                 style={{

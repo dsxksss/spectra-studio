@@ -17,9 +17,11 @@ interface DragState {
     factor: number;
     widgetW: number;
     widgetH: number;
+    alignX: 'start' | 'end';
+    alignY: 'start' | 'end';
 }
 
-export function useCustomDrag(widgetW: number, widgetH: number) {
+export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' | 'end' = 'end', alignY: 'start' | 'end' = 'end') {
     const isDragging = useRef(false);
     const dragState = useRef<DragState | null>(null);
     const mousePos = useRef({ x: 0, y: 0 });
@@ -71,7 +73,8 @@ export function useCustomDrag(widgetW: number, widgetH: number) {
         const {
             startX, startY, winStartX, winStartY,
             monitorX, monitorY, monitorW, monitorH,
-            factor, widgetW: currentWidgetW, widgetH: currentWidgetH
+            factor, widgetW: currentWidgetW, widgetH: currentWidgetH,
+            alignX: dragAlignX, alignY: dragAlignY
         } = dragState.current;
 
         const currentX = mousePos.current.x;
@@ -89,10 +92,26 @@ export function useCustomDrag(widgetW: number, widgetH: number) {
         const wPhys = currentWidgetW * factor;
         const hPhys = currentWidgetH * factor;
 
-        const visualLeft = newX + (winPhysW - wPhys);
-        const visualRight = newX + winPhysW;
-        const visualTop = newY + (winPhysH - hPhys);
-        const visualBottom = newY + winPhysH;
+        let visualLeft = 0;
+        let visualRight = 0;
+        let visualTop = 0;
+        let visualBottom = 0;
+
+        if (dragAlignX === 'start') {
+            visualLeft = newX;
+            visualRight = newX + wPhys;
+        } else {
+            visualLeft = newX + (winPhysW - wPhys);
+            visualRight = newX + winPhysW;
+        }
+
+        if (dragAlignY === 'start') {
+            visualTop = newY;
+            visualBottom = newY + hPhys;
+        } else {
+            visualTop = newY + (winPhysH - hPhys);
+            visualBottom = newY + winPhysH;
+        }
 
         // Apply Resistance (Damping)
         if (visualLeft < monitorX) {
@@ -162,32 +181,52 @@ export function useCustomDrag(widgetW: number, widgetH: number) {
         let targetX = currentPos.x;
         let targetY = currentPos.y;
 
-        const { factor, monitorX, monitorW, monitorY, monitorH, widgetW: wW, widgetH: wH } = state;
+        const { factor, monitorX, monitorW, monitorY, monitorH, widgetW: wW, widgetH: wH, alignX: dragAlignX, alignY: dragAlignY } = state;
         const winPhysW = WIN_MAX_W * factor;
         const winPhysH = WIN_MAX_H * factor;
         const wPhys = wW * factor;
         const hPhys = wH * factor;
 
-        const visualLeft = targetX + (winPhysW - wPhys);
-        const visualRight = targetX + winPhysW;
-        const visualTop = targetY + (winPhysH - hPhys);
-        const visualBottom = targetY + winPhysH;
+        let visualLeft = 0;
+        let visualRight = 0;
+        let visualTop = 0;
+        let visualBottom = 0;
+
+        if (dragAlignX === 'start') {
+            visualLeft = targetX;
+            visualRight = targetX + wPhys;
+        } else {
+            visualLeft = targetX + (winPhysW - wPhys);
+            visualRight = targetX + winPhysW;
+        }
+
+        if (dragAlignY === 'start') {
+            visualTop = targetY;
+            visualBottom = targetY + hPhys;
+        } else {
+            visualTop = targetY + (winPhysH - hPhys);
+            visualBottom = targetY + winPhysH;
+        }
 
         let needsSnap = false;
 
         if (visualLeft < monitorX) {
-            targetX = monitorX - (winPhysW - wPhys);
+            const overshoot = monitorX - visualLeft;
+            targetX += overshoot;
             needsSnap = true;
         } else if (visualRight > monitorX + monitorW) {
-            targetX = (monitorX + monitorW) - winPhysW;
+            const overshoot = visualRight - (monitorX + monitorW);
+            targetX -= overshoot;
             needsSnap = true;
         }
 
         if (visualTop < monitorY) {
-            targetY = monitorY - (winPhysH - hPhys);
+            const overshoot = monitorY - visualTop;
+            targetY += overshoot;
             needsSnap = true;
         } else if (visualBottom > monitorY + monitorH) {
-            targetY = (monitorY + monitorH) - winPhysH;
+            const overshoot = visualBottom - (monitorY + monitorH);
+            targetY -= overshoot;
             needsSnap = true;
         }
 
@@ -236,7 +275,9 @@ export function useCustomDrag(widgetW: number, widgetH: number) {
                 monitorH: waH,
                 factor,
                 widgetW,
-                widgetH
+                widgetH,
+                alignX,
+                alignY
             };
 
             // We listen on window to be safe, but capture should keep it on target.
@@ -250,7 +291,7 @@ export function useCustomDrag(widgetW: number, widgetH: number) {
         } catch (err) {
             console.error('Failed to init drag:', err);
         }
-    }, [handlePointerMove, handlePointerUp, updatePosition, widgetW, widgetH]);
+    }, [handlePointerMove, handlePointerUp, updatePosition, widgetW, widgetH, alignX, alignY]);
 
     return { handlePointerDown };
 }
