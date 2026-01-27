@@ -14,7 +14,7 @@ import { useCustomDrag } from "../hooks/useCustomDrag";
 const UI_SIZES = {
     collapsed: { w: 56, h: 56, r: 28 },
     toolbar: { w: 420, h: 56, r: 28 },
-    expanded: { w: 800, h: 600, r: 16 }
+    expanded: { w: 1200, h: 800, r: 16 }
 };
 
 const ANIMATION_DURATION = 300;
@@ -28,7 +28,7 @@ export default function FloatingApp() {
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
     const isAnimatingRef = useRef(false);
-    const { handleMouseDown: handleDragStart } = useCustomDrag();
+    const { handlePointerDown: handleDragStart } = useCustomDrag(currentUiSize.w, currentUiSize.h);
 
     useEffect(() => {
         // 初始化时设置点击区域为 toolbar 大小
@@ -95,7 +95,7 @@ export default function FloatingApp() {
             case 'collapsed':
                 return (
                     <div className="w-full h-full relative flex items-center justify-center">
-                        <div className="absolute inset-0 cursor-move" onMouseDown={handleDragStart} />
+                        <div className="absolute inset-0 cursor-move" onPointerDown={handleDragStart} />
                         <div
                             className={`z-10 w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${connectedService ? 'bg-white/5 border border-white/10' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}
                             onClick={() => handleChangeMode('toolbar')}
@@ -111,13 +111,14 @@ export default function FloatingApp() {
                             onClose={() => handleChangeMode('toolbar')}
                             onConnect={(s) => { setConnectedService(s); handleChangeMode('toolbar'); }}
                             activeService={connectedService}
+                            onDragStart={handleDragStart}
                         />
                     </div>
                 );
             default:
                 return (
                     <div className="flex items-center w-full h-full px-4 gap-3 bg-[#18181b]">
-                        <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors" onMouseDown={handleDragStart}>
+                        <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors" onPointerDown={handleDragStart}>
                             <GripVertical size={20} />
                         </div>
                         <button

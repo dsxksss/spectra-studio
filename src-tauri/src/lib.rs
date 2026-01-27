@@ -41,11 +41,43 @@ fn update_click_region(window: tauri::Window, width: f64, height: f64) {
     }
 }
 
+#[tauri::command]
+fn get_screen_work_area(window: tauri::Window) -> (i32, i32, i32, i32) {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+        
+        if let Ok(hwnd) = window.hwnd() {
+            unsafe {
+                let hmonitor = MonitorFromWindow(HWND(hwnd.0 as _), MONITOR_DEFAULTTONEAREST);
+                let mut mi = MONITORINFO {
+                    cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                    ..Default::default()
+                };
+                if GetMonitorInfoW(hmonitor, &mut mi).as_bool() {
+                    let r = mi.rcWork;
+                    return (r.left, r.top, r.right - r.left, r.bottom - r.top);
+                }
+            }
+        }
+    }
+    
+    // Fallback
+    if let Ok(Some(m)) = window.current_monitor() {
+        let size = m.size();
+        let pos = m.position();
+        (pos.x, pos.y, size.width as i32, size.height as i32)
+    } else {
+        (0, 0, 800, 600)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_opener::init())
-    .invoke_handler(tauri::generate_handler![greet, update_click_region])
+    .invoke_handler(tauri::generate_handler![greet, update_click_region, get_screen_work_area])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
 
@@ -53,8 +85,8 @@ pub fn run() {
             let screen_size = monitor.size();
             
             // 设定最大物理尺寸
-            let max_width = 800.0; 
-            let max_height = 600.0;
+            let max_width = 1200.0; 
+            let max_height = 800.0;
             
             let factor = window.scale_factor().unwrap();
             let p_width = max_width * factor;
