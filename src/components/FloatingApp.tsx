@@ -42,7 +42,7 @@ export default function FloatingApp() {
 
     const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
 
-    const { handlePointerDown: handleDragStart } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
+    const { handlePointerDown: handleDragStart, isActuallyDragging } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
 
     const handleChangeMode = async (targetMode: 'toolbar' | 'collapsed' | 'expanded') => {
         if (targetMode === viewMode || isAnimatingRef.current) return;
@@ -188,8 +188,14 @@ export default function FloatingApp() {
                     <div className="w-full h-full relative flex items-center justify-center">
                         <div className="absolute inset-0 cursor-move" onPointerDown={handleDragStart} />
                         <div
+                            data-draggable="true"
                             className={`z-10 w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${connectedService ? 'bg-white/5 border border-white/10' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}
-                            onClick={() => handleChangeMode('toolbar')}
+                            onPointerDown={handleDragStart}
+                            onClick={() => {
+                                if (!isActuallyDragging()) {
+                                    handleChangeMode('toolbar');
+                                }
+                            }}
                         >
                             {getServiceIcon(connectedService, 20)}
                         </div>

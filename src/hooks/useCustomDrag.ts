@@ -28,8 +28,11 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
     const isBusy = useRef(false); // Prevent IPC flooding
     const rafId = useRef<number | null>(null);
 
+    const hasDragged = useRef(false);
+
     // Physics constants
     const DAMPING_FACTOR = 0.5; // Slightly stiffer for better control
+    const DRAG_THRESHOLD = 5;
 
     // Animation Helper
     const animateTo = useCallback((startX: number, startY: number, endX: number, endY: number) => {
@@ -82,6 +85,11 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
 
         const deltaX = (currentX - startX) * factor;
         const deltaY = (currentY - startY) * factor;
+
+        // Check drag threshold
+        if (!hasDragged.current && (Math.abs(currentX - startX) > DRAG_THRESHOLD || Math.abs(currentY - startY) > DRAG_THRESHOLD)) {
+            hasDragged.current = true;
+        }
 
         let newX = winStartX + deltaX;
         let newY = winStartY + deltaY;
@@ -239,11 +247,14 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
     const handlePointerDown = useCallback(async (e: React.PointerEvent) => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
-        if (target.closest('input, textarea, button, select, a, [role="button"], [data-no-drag]')) {
+        // Allow dragging if target or ancestor has data-draggable="true"
+        if (target.closest('input, textarea, button, select, a, [role="button"], [data-no-drag]') && !target.closest('[data-draggable="true"]')) {
             return;
         }
 
         e.preventDefault();
+
+        hasDragged.current = false;
 
         try {
             target.setPointerCapture(e.pointerId);
@@ -293,5 +304,5 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         }
     }, [handlePointerMove, handlePointerUp, updatePosition, widgetW, widgetH, alignX, alignY]);
 
-    return { handlePointerDown };
+    return { handlePointerDown, isActuallyDragging: () => hasDragged.current };
 }

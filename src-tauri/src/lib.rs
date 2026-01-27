@@ -2,6 +2,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, PhysicalPosition};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
@@ -160,6 +162,50 @@ pub fn run() {
             }
         }
         
+        // Initialize System Tray
+        
+        // Better construction using Menu::new if available, or just constructing items directly
+        let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+        let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+        let menu = Menu::with_items(app, &[&show, &quit])?;
+
+        let _tray = TrayIconBuilder::new()
+            .menu(&menu)
+            .show_menu_on_left_click(false)
+            .on_menu_event(|app, event| {
+                match event.id.as_ref() {
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    _ => {}
+                }
+            })
+            .on_tray_icon_event(|tray, event| {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    ..
+                } = event
+                {
+                    let app = tray.app_handle();
+                    if let Some(window) = app.get_webview_window("main") {
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = window.hide();
+                        } else {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                }
+            })
+            .icon(app.default_window_icon().unwrap().clone())
+            .build(app)?;
+
         window.show().unwrap();
         Ok(())
     })
