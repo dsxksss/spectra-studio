@@ -15,6 +15,7 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST, CreateRectRgn, SetWindowRgn}; // Added imports
 
+use std::time::Duration;
 use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, MySqlPool, PgPool};
 use mongodb::{options::ClientOptions, Client};
 
@@ -101,7 +102,9 @@ async fn connect_redis(
     host: String,
     port: u16,
     password: Option<String>,
+    timeout_sec: Option<u64>,
 ) -> Result<String, String> {
+    let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let url = if let Some(pwd) = password {
         if !pwd.is_empty() {
             format!("redis://:{}@{}:{}/", pwd, host, port)
@@ -113,7 +116,12 @@ async fn connect_redis(
     };
 
     let client = redis::Client::open(url).map_err(|e| e.to_string())?;
-    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    // Use tokio timeout for connection
+    let mut con = tokio::time::timeout(timeout_val, client.get_multiplexed_async_connection())
+        .await
+        .map_err(|_| "Connection timed out".to_string())?
+        .map_err(|e| e.to_string())?;
     
     let _: () = redis::cmd("PING").query_async(&mut con).await.map_err(|e| e.to_string())?;
     
@@ -129,7 +137,9 @@ async fn connect_mysql(
     username: String,
     password: Option<String>,
     database: Option<String>,
+    timeout_sec: Option<u64>,
 ) -> Result<String, String> {
+    let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "mysql".to_string()); // Default to mysql db to test connection
     let url = format!(
         "mysql://{}:{}@{}:{}/{}",
@@ -142,6 +152,7 @@ async fn connect_mysql(
 
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
+        .acquire_timeout(timeout_val)
         .connect(&url)
         .await
         .map_err(|e| e.to_string())?;
@@ -158,7 +169,9 @@ async fn connect_postgres(
     username: String,
     password: Option<String>,
     database: Option<String>,
+    timeout_sec: Option<u64>,
 ) -> Result<String, String> {
+    let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "postgres".to_string());
     let url = format!(
         "postgres://{}:{}@{}:{}/{}",
@@ -171,6 +184,7 @@ async fn connect_postgres(
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
+        .acquire_timeout(timeout_val)
         .connect(&url)
         .await
         .map_err(|e| e.to_string())?;
@@ -186,10 +200,15 @@ async fn connect_mongodb(
     port: u16,
     username: Option<String>,
     password: Option<String>,
+    timeout_sec: Option<u64>,
 ) -> Result<String, String> {
+    let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let mut client_options = ClientOptions::parse(format!("mongodb://{}:{}", host, port))
         .await
         .map_err(|e| e.to_string())?;
+
+    client_options.connect_timeout = Some(timeout_val);
+    client_options.server_selection_timeout = Some(timeout_val);
 
     if let (Some(u), Some(p)) = (username, password) {
          client_options.credential = Some(mongodb::options::Credential::builder()
@@ -283,6 +302,40 @@ async fn redis_del_key(state: State<'_, AppState>, key: String) -> Result<(), St
     Ok(())
 }
 
+#[tauri::command]
+async fn postgres_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT table_name::text FROM information_schema.tables WHERE table_schema = 'public'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_rows(state: State<'_, AppState>, table_name: String) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // Safe to use table_name directly? Best practice is to quote it.
+    // We limit to 100 rows for performance in this demo
+    let q = format!("SELECT row_to_json(t)::text FROM (SELECT * FROM public.\"{}\" LIMIT 100) t", table_name);
+    
+    let rows: Vec<(String,)> = sqlx::query_as(&q)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(json,)| json).collect())
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -302,6 +355,8 @@ pub fn run() {
         connect_mysql,
         connect_postgres,
         connect_mongodb,
+        postgres_get_tables,
+        postgres_get_rows,
         redis_get_keys, 
         redis_get_value, 
         redis_set_value,
@@ -413,6 +468,7 @@ pub fn run() {
             .build(app)?;
 
         window.show().unwrap();
+        window.open_devtools();
         Ok(())
     })
     .run(tauri::generate_context!())

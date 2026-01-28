@@ -9,6 +9,7 @@ import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
+import PostgresManager from "./PostgresManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
 import ClickSpark from "./ClickSpark";
 import Silk from "./BG";
@@ -33,14 +34,14 @@ export default function FloatingApp() {
     const isAnimatingRef = useRef(false);
 
     useEffect(() => {
-        // 初始化时设置点击区域为 toolbar 大小
+        // 初始化时根据当前状态设置点击区域 (修复 HMR/重载时的显示问题)
         invoke('update_click_region', {
-            width: UI_SIZES.toolbar.w,
-            height: UI_SIZES.toolbar.h,
-            alignX: 'end',
-            alignY: 'end'
+            width: currentUiSize.w,
+            height: currentUiSize.h,
+            alignX: layoutAlign.x,
+            alignY: layoutAlign.y
         });
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
 
@@ -206,21 +207,19 @@ export default function FloatingApp() {
             case 'expanded':
                 return (
                     <div className="w-full h-full relative flex flex-col overflow-hidden">
-                        <div className="absolute inset-0 z-0">
-                            <Silk
-                                speed={5}
-                                scale={1}
-                                color="#4778ffff"
-                                noiseIntensity={1.5}
-                                rotation={2}
-                            />
-                        </div>
                         <div className="relative z-10 w-full h-full flex flex-col">
                             {connectedService === 'Redis' ? (
                                 <RedisManager
                                     onClose={() => handleChangeMode('toolbar')}
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
+                                />
+                            ) : connectedService ? (
+                                <PostgresManager
+                                    onClose={() => handleChangeMode('toolbar')}
+                                    onDisconnect={() => setConnectedService(null)}
+                                    onDragStart={handleDragStart}
+                                    serviceType={connectedService}
                                 />
                             ) : (
                                 <DatabaseManager
@@ -276,6 +275,26 @@ export default function FloatingApp() {
                     transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
                 }}
             >
+                {/* Persistent Background Layer */}
+                <div
+                    className="absolute inset-0 z-0 transition-opacity pointer-events-none overflow-hidden"
+                    style={{
+                        opacity: viewMode === 'expanded' ? 1 : 0,
+                        borderRadius: `${currentUiSize.r}px`,
+                        transitionDelay: viewMode === 'expanded' ? '150ms' : '0ms',
+                        transitionDuration: viewMode === 'expanded' ? '300ms' : '100ms',
+                        transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
+                    }}
+                >
+                    <Silk
+                        speed={5}
+                        scale={1}
+                        color="#4778ffff"
+                        noiseIntensity={1.5}
+                        rotation={2}
+                    />
+                </div>
+
                 <ClickSpark
                     sparkColor='#fff'
                     sparkSize={10}
@@ -284,7 +303,7 @@ export default function FloatingApp() {
                     duration={400}
                 >
                     <div
-                        className="w-full h-full transition-opacity duration-150 ease-out"
+                        className="w-full h-full transition-opacity duration-150 ease-out relative z-10"
                         style={{ opacity: contentOpacity }}
                     >
                         {renderContent()}

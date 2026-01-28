@@ -13,9 +13,11 @@ import {
     Globe,
     Save,
     Play,
-    RefreshCw
+    RefreshCw,
+    Pencil,
+    Trash2
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
 
@@ -78,6 +80,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
     // Form State
     const [connectionName, setConnectionName] = useState('New Connection');
+    const [isCustomName, setIsCustomName] = useState(false);
     const [environment, setEnvironment] = useState('Development');
     const [host, setHost] = useState('127.0.0.1');
     const [port, setPort] = useState('6379');
@@ -85,9 +88,38 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const [password, setPassword] = useState('');
     const [dbName, setDbName] = useState('0');
 
+    useEffect(() => {
+        if (!isCustomName) {
+            setConnectionName(`${selectedService} - ${host}:${port}`);
+        }
+    }, [selectedService, host, port, isCustomName]);
+
     const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isConnecting, setIsConnecting] = useState(false);
+
+    // Settings State
+    const [showSettings, setShowSettings] = useState(false);
+    const [timeoutSec, setTimeoutSec] = useState(5);
+
+    useEffect(() => {
+        const storedSettings = localStorage.getItem('spectra_settings');
+        if (storedSettings) {
+            try {
+                const parsed = JSON.parse(storedSettings);
+                if (parsed.timeout) setTimeoutSec(parsed.timeout);
+            } catch (e) {
+                console.error("Failed to parse settings", e);
+            }
+        }
+    }, []);
+
+    const saveSettings = () => {
+        const settings = { timeout: timeoutSec };
+        localStorage.setItem('spectra_settings', JSON.stringify(settings));
+        showToast('Settings Saved', 'success');
+        setShowSettings(false);
+    };
 
     // Toast State
     const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
@@ -115,9 +147,24 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         }
     }, []);
 
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    const handleCreateNew = () => {
+        setEditingId(null);
+        setConnectionName('New Connection');
+        setEnvironment('Development');
+        setHost('127.0.0.1');
+        setPort('6379');
+        setUsername('');
+        setPassword('');
+        setDbName('0');
+        setSelectedService('Redis');
+        setIsCustomName(false);
+    };
+
     const saveConnection = () => {
         const newConnection: SavedConnection = {
-            id: Date.now().toString(),
+            id: editingId || Date.now().toString(),
             name: connectionName,
             type: selectedService,
             host,
@@ -128,15 +175,14 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             environment
         };
 
-        // Check if updating existing by name (simple dedupe/overwrite)
-        const existingIndex = savedConnections.findIndex(c => c.name === connectionName);
         let newConnections;
-        if (existingIndex >= 0) {
-            const updated = [...savedConnections];
-            updated[existingIndex] = { ...newConnection, id: updated[existingIndex].id }; // keep ID
-            newConnections = updated;
+        if (editingId) {
+            newConnections = savedConnections.map(c => c.id === editingId ? newConnection : c);
+            showToast('Connection Updated', 'success');
         } else {
             newConnections = [...savedConnections, newConnection];
+            setEditingId(newConnection.id); // Switch to editing the newly created one
+            showToast('Connection Created', 'success');
         }
 
         setSavedConnections(newConnections);
@@ -144,6 +190,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     };
 
     const loadConnection = (conn: SavedConnection) => {
+        setEditingId(conn.id);
         setConnectionName(conn.name);
         setSelectedService(conn.type);
         setHost(conn.host);
@@ -152,21 +199,99 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setPassword(conn.password || '');
         setDbName(conn.database || '0');
         setEnvironment(conn.environment);
+        setIsCustomName(true);
     };
 
-    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string) => {
+    const handleServiceChange = (service: string) => {
+        setSelectedService(service);
+        switch (service) {
+            case 'Redis':
+                setPort('6379');
+                setDbName('0');
+                break;
+            case 'MySQL':
+                setPort('3306');
+                setDbName('mysql');
+                break;
+            case 'PostgreSQL':
+                setPort('5432');
+                setDbName('postgres');
+                break;
+            case 'MongoDB':
+                setPort('27017');
+                setDbName('admin');
+                break;
+        }
+    };
+
+    const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; conn: SavedConnection | null }>({
+        visible: false, x: 0, y: 0, conn: null
+    });
+
+    useEffect(() => {
+        const handleClick = () => setContextMenu(prev => ({ ...prev, visible: false }));
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, []);
+
+    const handleContextMenu = (e: React.MouseEvent, conn: SavedConnection) => {
+        e.preventDefault();
+        setContextMenu({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            conn: conn
+        });
+    };
+
+    const handleEditConnection = () => {
+        const conn = contextMenu.conn;
+        if (!conn) return;
+
+        setConnectionName(conn.name);
+        setEnvironment(conn.environment);
+        setHost(conn.host);
+        setPort(conn.port);
+        setUsername(conn.username);
+        if (conn.password) setPassword(conn.password);
+        if (conn.database) setDbName(conn.database);
+
+        // We set service which might reset defaults, so we need to be careful
+        // The handleServiceChange function resets port/dbName. 
+        // We should just set the state directly without calling handleServiceChange or call it then override.
+        // But handleServiceChange is just a helper. Let's just set the state.
+        setSelectedService(conn.type);
+        // Note: handleServiceChange is NOT called here to avoid resetting port to default if user had custom.
+
+        setIsCustomName(true);
+        setShowSettings(false);
+    };
+
+    const handleDeleteConnection = () => {
+        const conn = contextMenu.conn;
+        if (!conn) return;
+
+        const updated = savedConnections.filter(c => c.id !== conn.id);
+        setSavedConnections(updated);
+        localStorage.setItem('spectra_saved_connections', JSON.stringify(updated));
+        showToast('Connection deleted', 'success');
+    };
+
+    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false) => {
         setIsConnecting(true);
         try {
             let res;
             const portNum = parseInt(portStr);
             const passwordArg = passStr || null;
-            const usernameArg = username || '';
+            const usernameArg = usernameStr || '';
+            const dbArg = dbNameStr || null;
 
             if (service === 'Redis') {
                 res = await invoke('connect_redis', {
                     host: hostStr,
                     port: portNum,
-                    password: passwordArg
+                    password: passwordArg,
+                    timeout_sec: timeoutSec
                 });
             } else if (service === 'MySQL') {
                 res = await invoke('connect_mysql', {
@@ -174,7 +299,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     port: portNum,
                     username: usernameArg,
                     password: passwordArg,
-                    database: dbName || null
+                    database: dbArg,
+                    timeout_sec: timeoutSec
                 });
             } else if (service === 'PostgreSQL') {
                 res = await invoke('connect_postgres', {
@@ -182,20 +308,22 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     port: portNum,
                     username: usernameArg,
                     password: passwordArg,
-                    database: dbName || null
+                    database: dbArg,
+                    timeout_sec: timeoutSec
                 });
             } else if (service === 'MongoDB') {
                 res = await invoke('connect_mongodb', {
                     host: hostStr,
                     port: portNum,
                     username: usernameArg || null,
-                    password: passwordArg
+                    password: passwordArg,
+                    timeout_sec: timeoutSec
                 });
             }
 
             console.log(res);
             showToast(`${service} Connection Successful`, 'success');
-            if (onConnect) {
+            if (!isTestOnly && onConnect) {
                 onConnect(service);
             }
         } catch (err: any) {
@@ -207,20 +335,17 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     };
 
     const handleConnectClick = () => {
-        performConnect(selectedService, host, port, password);
+        performConnect(selectedService, host, port, password, username, dbName, true);
     };
 
     const handleSavedConnect = (e: React.MouseEvent, conn: SavedConnection) => {
-        e.stopPropagation(); // Prevent loading form again if button inside item
-        // Load it first for consistency
-        loadConnection(conn);
-        // Then connect
-        performConnect(conn.type, conn.host, conn.port, conn.password || '');
+        e.stopPropagation();
+        // Just connect, do not load into form (user rule: edit only via context menu)
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false);
     };
 
     const handleDoubleClick = (conn: SavedConnection) => {
-        loadConnection(conn);
-        performConnect(conn.type, conn.host, conn.port, conn.password || '');
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false);
     };
 
     const filteredConnections = savedConnections.filter(c =>
@@ -253,7 +378,16 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="flex items-center justify-between px-6 py-4">
                         <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">My Connections</span>
-                        <span className="bg-white/5 text-gray-500 px-2 py-0.5 rounded-full text-[10px] font-mono border border-white/5">{savedConnections.length}</span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleCreateNew}
+                                className="w-5 h-5 flex items-center justify-center rounded bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white transition-all"
+                                title="Add New Connection"
+                            >
+                                <Plus size={10} />
+                            </button>
+                            <span className="bg-white/5 text-gray-500 px-2 py-0.5 rounded-full text-[10px] font-mono border border-white/5">{savedConnections.length}</span>
+                        </div>
                     </div>
 
                     {filteredConnections.length === 0 ? (
@@ -268,12 +402,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             </div>
                             <span className="text-sm font-medium text-gray-500 mb-2">No connections found</span>
                             <button
-                                onClick={() => {
-                                    setConnectionName('New Connection');
-                                    setHost('127.0.0.1');
-                                    setPort('6379');
-                                    setUsername('');
-                                }}
+                                onClick={handleCreateNew}
                                 className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20 hover:border-blue-500/40"
                             >
                                 <Plus size={12} /> Create New
@@ -286,6 +415,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     key={conn.id}
                                     onClick={() => loadConnection(conn)}
                                     onDoubleClick={() => handleDoubleClick(conn)}
+                                    onContextMenu={(e) => handleContextMenu(e, conn)}
                                     className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${connectionName === conn.name ? 'bg-white/5 border-white/10' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 mb-1">
@@ -312,17 +442,47 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         </div>
                     )}
                 </div>
+                {/* Context Menu */}
+                <AnimatePresence>
+                    {contextMenu.visible && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.1 }}
+                            style={{ top: contextMenu.y, left: contextMenu.x }}
+                            className="fixed z-[100] w-48 bg-[#18181b] border border-white/10 rounded-lg shadow-xl overflow-hidden py-1"
+                        >
+                            <button
+                                onClick={handleEditConnection}
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition-colors"
+                            >
+                                <Pencil size={14} /> Edit Connection
+                            </button>
+                            <div className="h-[1px] bg-white/5 my-1" />
+                            <button
+                                onClick={handleDeleteConnection}
+                                className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-2 transition-colors"
+                            >
+                                <Trash2 size={14} /> Delete
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Sidebar Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <div className="flex items-center gap-2.5 px-2">
-                        <div className="relative">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
-                            <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75"></div>
+                        <div className="relative flex items-center justify-center w-2 h-2">
+                            <div className="absolute w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                            <div className="absolute w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75"></div>
                         </div>
-                        <span className="font-medium tracking-wide">v2.4.0 Stable</span>
+                        <span className="font-medium tracking-wide">v0.1.0 Stable</span>
                     </div>
-                    <button className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-gray-300 transition-all active:scale-95">
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-gray-300 transition-all active:scale-95"
+                    >
                         <Settings size={18} />
                     </button>
                 </div>
@@ -351,9 +511,16 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             <Database size={32} className="text-white drop-shadow-md" />
                         </div>
                         <div className="pt-1">
-                            <h1 className="text-3xl font-bold text-white mb-1.5 tracking-tight">Connect Service</h1>
+                            <h1 className="text-3xl font-bold text-white mb-1.5 tracking-tight flex items-center gap-3">
+                                {editingId ? (
+                                    <>
+                                        Edit Connection
+                                        <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs px-2 py-0.5 rounded uppercase tracking-wider font-bold">Editing</span>
+                                    </>
+                                ) : 'New Connection'}
+                            </h1>
                             <p className="text-gray-400 text-sm flex items-center gap-2">
-                                Configure your database connection
+                                {editingId ? 'Modify existing configuration' : 'Configure your database connection'}
                                 <span className="w-1 h-1 rounded-full bg-gray-600" />
                                 <span className="text-gray-500 text-xs">Secure Environment</span>
                             </p>
@@ -379,7 +546,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 <input
                                     type="text"
                                     value={connectionName}
-                                    onChange={(e) => setConnectionName(e.target.value)}
+                                    onChange={(e) => {
+                                        setConnectionName(e.target.value);
+                                        setIsCustomName(true);
+                                    }}
                                     placeholder="e.g. Production DB"
                                     className="w-full bg-[#18181b] border border-white/10 rounded-xl px-5 py-3 text-white text-sm focus:outline-none focus:border-blue-500/50 transition-all font-medium placeholder:text-gray-700 shadow-sm"
                                 />
@@ -411,7 +581,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                         icon={service === 'Redis' ? Activity : (service === 'MongoDB' ? Globe : Database)}
                                         label={service}
                                         active={selectedService === service}
-                                        onClick={() => setSelectedService(service)}
+                                        onClick={() => handleServiceChange(service)}
                                     />
                                 ))}
                             </div>
@@ -515,20 +685,11 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <span>Cancel</span>
                     </motion.button>
                     <motion.button
-                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(22, 163, 74, 1)' }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={saveConnection}
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
-                    >
-                        <Save size={18} />
-                        <span>Save</span>
-                    </motion.button>
-                    <motion.button
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={handleConnectClick}
                         disabled={isConnecting}
-                        className="flex items-center gap-2.5 px-10 py-3 rounded-xl border border-white/10 hover:border-white/20 text-gray-300 hover:text-white transition-all font-semibold text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2.5 px-6 py-3 rounded-xl border border-white/10 hover:border-white/20 text-gray-300 hover:text-white transition-all font-semibold text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <div className="flex relative items-center justify-center">
                             {isConnecting ? (
@@ -539,7 +700,86 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         </div>
                         <span>{isConnecting ? 'Testing...' : 'Test Connection'}</span>
                     </motion.button>
+                    <motion.button
+                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(22, 163, 74, 1)' }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={saveConnection}
+                        className="flex items-center gap-2 px-8 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
+                    >
+                        <Save size={18} />
+                        <span>{editingId ? 'Update' : 'Save'}</span>
+                    </motion.button>
                 </motion.div>
+
+                {/* Settings Modal */}
+                <AnimatePresence>
+                    {showSettings && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center p-8">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowSettings(false)}
+                                className="absolute inset-0 bg-black/60 backdrop-blur-md"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="w-full max-w-md bg-[#121214] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden"
+                            >
+                                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#18181b]">
+                                    <h3 className="font-bold text-gray-200 flex items-center gap-2">
+                                        <Settings size={18} className="text-gray-500" />
+                                        Settings
+                                    </h3>
+                                    <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    <div className="space-y-4">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Connection Settings</h4>
+
+                                        <div className="space-y-2.5">
+                                            <div className="flex justify-between text-sm text-gray-300">
+                                                <span>Connection Timeout</span>
+                                                <span className="font-mono text-blue-400">{timeoutSec}s</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="1"
+                                                max="60"
+                                                value={timeoutSec}
+                                                onChange={(e) => setTimeoutSec(parseInt(e.target.value))}
+                                                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                                            />
+                                            <p className="text-[10px] text-gray-500">
+                                                Timeout duration for database connection attempts (1-60 seconds).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border-t border-white/5 bg-[#18181b]/50 flex justify-end gap-3 glass">
+                                    <button
+                                        onClick={() => setShowSettings(false)}
+                                        className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={saveSettings}
+                                        className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
                 {/* Toast Notification */}
                 <Toast
@@ -548,7 +788,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     isVisible={toast.isVisible}
                     onClose={hideToast}
                 />
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
