@@ -11,6 +11,7 @@ import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
 import ClickSpark from "./ClickSpark";
+import Silk from "./BG";
 
 // UI 尺寸定义
 const UI_SIZES = {
@@ -30,7 +31,6 @@ export default function FloatingApp() {
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
     const isAnimatingRef = useRef(false);
-
 
     useEffect(() => {
         // 初始化时设置点击区域为 toolbar 大小
@@ -205,21 +205,32 @@ export default function FloatingApp() {
                 );
             case 'expanded':
                 return (
-                    <div className="w-full h-full bg-[#09090b] flex flex-col">
-                        {connectedService === 'Redis' ? (
-                            <RedisManager
-                                onClose={() => handleChangeMode('toolbar')}
-                                onDisconnect={() => setConnectedService(null)}
-                                onDragStart={handleDragStart}
+                    <div className="w-full h-full relative flex flex-col overflow-hidden">
+                        <div className="absolute inset-0 z-0">
+                            <Silk
+                                speed={5}
+                                scale={1}
+                                color="#4778ffff"
+                                noiseIntensity={1.5}
+                                rotation={2}
                             />
-                        ) : (
-                            <DatabaseManager
-                                onClose={() => handleChangeMode('toolbar')}
-                                onConnect={(s) => setConnectedService(s)}
-                                activeService={connectedService}
-                                onDragStart={handleDragStart}
-                            />
-                        )}
+                        </div>
+                        <div className="relative z-10 w-full h-full flex flex-col">
+                            {connectedService === 'Redis' ? (
+                                <RedisManager
+                                    onClose={() => handleChangeMode('toolbar')}
+                                    onDisconnect={() => setConnectedService(null)}
+                                    onDragStart={handleDragStart}
+                                />
+                            ) : (
+                                <DatabaseManager
+                                    onClose={() => handleChangeMode('toolbar')}
+                                    onConnect={(s) => setConnectedService(s)}
+                                    activeService={connectedService}
+                                    onDragStart={handleDragStart}
+                                />
+                            )}
+                        </div>
                     </div>
                 );
             default:

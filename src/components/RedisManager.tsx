@@ -253,9 +253,9 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
     };
 
     return (
-        <div className="flex w-full h-full bg-[#09090b] text-gray-300 font-sans overflow-hidden border border-white/10 selection:bg-blue-500/30 rounded-[28px] shadow-2xl relative">
+        <div className="flex w-full h-full bg-transparent text-gray-300 font-sans overflow-hidden selection:bg-blue-500/30">
             {/* Sidebar */}
-            <div className="w-80 bg-[#0c0c0e]/95 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
+            <div className="w-80 bg-[#0c0c0e]/50 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
                 {/* Fixed Header */}
                 <div className="p-4 border-b border-white/5 cursor-move" onPointerDown={onDragStart}>
                     <div className="flex items-center justify-between mb-4 px-2">
@@ -322,7 +322,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]">
+                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <span>{keys.length} Keys found</span>
                     <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
                         <LogOut size={14} /> <span className="font-medium">Disconnect</span>
@@ -331,7 +331,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col bg-[#09090b] relative overflow-hidden">
+            <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
                 <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
                     {isCreating || isEditing ? (
                         <div className="flex items-center gap-4 flex-1">

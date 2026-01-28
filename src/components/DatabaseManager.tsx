@@ -189,9 +189,9 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     );
 
     return (
-        <div className="flex w-full h-full bg-[#09090b] text-gray-300 font-sans overflow-hidden border border-white/10 selection:bg-blue-500/30 rounded-[28px] shadow-2xl">
+        <div className="flex w-full h-full bg-transparent text-gray-300 font-sans overflow-hidden selection:bg-blue-500/30">
             {/* Sidebar */}
-            <div className="w-80 bg-[#0c0c0e]/95 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
+            <div className="w-80 bg-[#0c0c0e]/50 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
                 {/* Sidebar Header */}
                 <div
                     className="p-5 border-b border-white/5 cursor-move"
@@ -274,7 +274,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 </div>
 
                 {/* Sidebar Footer */}
-                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]">
+                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <div className="flex items-center gap-2.5 px-2">
                         <div className="relative">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
@@ -289,7 +289,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col bg-[#09090b] relative overflow-hidden">
+            <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
                 {/* Background Gradients for visuals */}
                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/2 mix-blend-screen" />
                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[100px] pointer-events-none translate-y-1/2 -translate-x-1/2 mix-blend-screen" />
@@ -382,7 +382,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 0.4, delay: 0.2 }}
-                            className="border border-white/10 rounded-2xl bg-[#0c0c0e]/40 p-8 space-y-8 backdrop-blur-md relative overflow-hidden shadow-2xl"
+                            className="border border-white/10 rounded-2xl bg-[#0c0c0e]/30 p-8 space-y-8 backdrop-blur-md relative overflow-hidden shadow-2xl"
                         >
                             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
                             <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl" />
@@ -451,7 +451,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     initial={{ y: 100 }}
                     animate={{ y: 0 }}
                     transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 20 }}
-                    className="px-10 py-6 border-t border-white/5 flex items-center justify-end gap-5 bg-[#09090b]/90 backdrop-blur-xl sticky bottom-0 z-20"
+                    className="px-10 py-6 border-t border-white/5 flex items-center justify-end gap-5 bg-[#09090b]/50 backdrop-blur-xl sticky bottom-0 z-20"
                 >
                     <motion.button
                         whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)' }}
