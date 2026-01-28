@@ -570,7 +570,9 @@ pub fn run() {
             .build(app)?;
 
         window.show().unwrap();
+        #[cfg(debug_assertions)]
         window.open_devtools();
+
         Ok(())
     })
     .run(tauri::generate_context!())

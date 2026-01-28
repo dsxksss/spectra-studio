@@ -9,10 +9,8 @@ import {
     LogOut,
     Table as TableIcon,
     AlertCircle,
-    Plus,
     Eye,
     Pencil,
-    Check,
     Save,
     RotateCcw,
     AlertTriangle
@@ -87,7 +85,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
 
     // Pagination
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(100);
+    const [pageSize] = useState(100);
     const [totalRows, setTotalRows] = useState(0);
     const [pageInput, setPageInput] = useState("1");
 
@@ -100,7 +98,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
     const [editHistory, setEditHistory] = useState<Record<number, Record<string, string>>[]>([]);
 
     // Saving State
-    const [isSaving, setIsSaving] = useState(false);
+    const [isSaving] = useState(false);
 
 
 
