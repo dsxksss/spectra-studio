@@ -102,7 +102,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
     };
 
     const handleSave = async () => {
-        const targetKey = isCreating ? editKeyName : selectedKey;
+        const targetKey = isCreating ? editKeyName : (editKeyName || selectedKey);
         if (!targetKey) return;
 
         let valueToSave = "";
@@ -117,6 +117,11 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
         }
 
         try {
+            // Handle Rename: if editing existing key and name changed, delete old key
+            if (!isCreating && selectedKey && selectedKey !== targetKey) {
+                await invoke('redis_del_key', { key: selectedKey });
+            }
+
             await invoke('redis_set_value', { key: targetKey, value: valueToSave });
 
             // Cleanup and Refresh
@@ -304,8 +309,8 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
                                 key={key}
                                 onClick={() => setSelectedKey(key)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left transition-all ${selectedKey === key
-                                        ? 'bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20'
-                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
+                                    ? 'bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20'
+                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
                                     }`}
                             >
                                 <Key size={14} className="opacity-70 shrink-0" />
@@ -334,10 +339,9 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{isCreating ? "Creating New Key" : "Editing Key"}</span>
                                 <input
                                     value={editKeyName}
-                                    onChange={e => isCreating && setEditKeyName(e.target.value)}
-                                    readOnly={!isCreating}
+                                    onChange={e => setEditKeyName(e.target.value)}
                                     placeholder="Enter key name..."
-                                    className={`bg-transparent text-white font-medium text-lg focus:outline-none placeholder:text-gray-600 ${!isCreating ? 'cursor-default opacity-80' : ''}`}
+                                    className={`bg-transparent text-white font-medium text-lg focus:outline-none placeholder:text-gray-600 border-b border-transparent focus:border-blue-500 transition-all`}
                                 />
                             </div>
                         </div>

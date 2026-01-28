@@ -104,6 +104,17 @@ async fn redis_set_value(state: State<'_, AppState>, key: String, value: String)
 }
 
 #[tauri::command]
+async fn redis_del_key(state: State<'_, AppState>, key: String) -> Result<(), String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    let _: () = redis::cmd("DEL").arg(key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn greet() -> String {
   let now = SystemTime::now();
   let epoch_ms = now.duration_since(UNIX_EPOCH).unwrap().as_millis();
@@ -188,7 +199,7 @@ pub fn run() {
     .manage(AppState {
         redis_client: Mutex::new(None),
     })
-    .invoke_handler(tauri::generate_handler![greet, update_click_region, get_screen_work_area, connect_redis, redis_get_keys, redis_get_value, redis_set_value])
+    .invoke_handler(tauri::generate_handler![greet, update_click_region, get_screen_work_area, connect_redis, redis_get_keys, redis_get_value, redis_set_value, redis_del_key])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
 
