@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
+import { Toast, ToastType } from './Toast';
 
 type SavedConnection = {
     id: string;
@@ -64,7 +65,7 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
                 value={value}
                 onChange={onChange}
                 placeholder={placeholder}
-                className="w-full bg-[#121214] border border-white/5 rounded-xl px-5 py-3 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner"
+                className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
             />
             <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white/5 pointer-events-none" />
         </div>
@@ -87,6 +88,21 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isConnecting, setIsConnecting] = useState(false);
+
+    // Toast State
+    const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
+        message: '',
+        type: 'info',
+        isVisible: false
+    });
+
+    const showToast = (message: string, type: ToastType) => {
+        setToast({ message, type, isVisible: true });
+    };
+
+    const hideToast = () => {
+        setToast(prev => ({ ...prev, isVisible: false }));
+    };
 
     useEffect(() => {
         const saved = localStorage.getItem('spectra_saved_connections');
@@ -148,17 +164,20 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     password: passStr || null
                 });
                 console.log(res);
+                showToast('Connection Successful', 'success');
                 if (onConnect) {
                     onConnect(service);
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Redis Connection Failed:", err);
-                alert(`Connection Failed: ${err}`);
+                showToast(`Connection Failed: ${err}`, 'error');
             } finally {
                 setIsConnecting(false);
             }
         } else {
             // Mock connection for others for now
+            await new Promise(resolve => setTimeout(resolve, 800)); // Simulate delay
+            showToast(`${service} Connection Successful (Mock)`, 'success');
             if (onConnect) {
                 onConnect(service);
             }
@@ -248,24 +267,24 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     onDoubleClick={() => handleDoubleClick(conn)}
                                     className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${connectionName === conn.name ? 'bg-white/5 border-white/10' : ''}`}
                                 >
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate pr-6">{conn.name}</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
                                             {conn.type}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-gray-500">
                                         <div className={`w-1.5 h-1.5 rounded-full ${conn.environment === 'Production' ? 'bg-red-500' : (conn.environment === 'Staging' ? 'bg-yellow-500' : 'bg-emerald-500')}`} />
-                                        <span>{conn.host}:{conn.port}</span>
+                                        <span className="truncate">{conn.host}:{conn.port}</span>
                                     </div>
 
                                     {/* Direct Connect Button */}
                                     <button
                                         onClick={(e) => handleSavedConnect(e, conn)}
-                                        className="absolute right-2 bottom-2 p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
                                         title="Connect Now"
                                     >
-                                        <Play size={12} fill="currentColor" />
+                                        <Play size={14} fill="currentColor" />
                                     </button>
                                 </div>
                             ))}
@@ -333,18 +352,18 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     >
 
                         {/* Row 1: Name & Group */}
-                        <div className="grid grid-cols-3 gap-8">
-                            <div className="col-span-2 space-y-2.5">
+                        <div className="flex gap-4 px-8">
+                            <div className="space-y-2.5 flex-[3]">
                                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Connection Name</label>
                                 <input
                                     type="text"
                                     value={connectionName}
                                     onChange={(e) => setConnectionName(e.target.value)}
                                     placeholder="e.g. Production DB"
-                                    className="w-full bg-[#18181b] border border-white/10 rounded-xl px-5 py-3 text-white text-base focus:outline-none focus:border-blue-500/50 transition-all font-medium placeholder:text-gray-700 shadow-sm"
+                                    className="w-full bg-[#18181b] border border-white/10 rounded-xl px-5 py-3 text-white text-sm focus:outline-none focus:border-blue-500/50 transition-all font-medium placeholder:text-gray-700 shadow-sm"
                                 />
                             </div>
-                            <div className="space-y-2.5">
+                            <div className="space-y-2.5 flex-[1]">
                                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Environment</label>
                                 <div className="relative">
                                     <select
@@ -362,9 +381,9 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         </div>
 
                         {/* Service Type */}
-                        <div className="space-y-4">
+                        <div className="space-y-4 px-8">
                             <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Service Type</label>
-                            <div className="flex gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                                 {['PostgreSQL', 'MySQL', 'Redis', 'MongoDB'].map((service) => (
                                     <ServiceTypeButton
                                         key={service}
@@ -392,13 +411,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Connection Details</h3>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-8">
-                                <div className="col-span-3">
+                            <div className="flex gap-4">
+                                <div className="flex-[3]">
                                     <InputField label="Host / IP Address" value={host} onChange={(e: any) => setHost(e.target.value)} />
                                 </div>
-                                <div className="space-y-2.5">
+                                <div className="flex flex-col gap-2.5 flex-[1]">
                                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Port</label>
-                                    <div className="flex items-center bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
+                                    <div className="flex items-center h-[46px] bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
                                         <button
                                             onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
                                             className="px-3.5 py-3 hover:text-white text-gray-500 border-r border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
@@ -420,16 +439,18 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-8">
-                                <InputField label="Username" value={username} onChange={(e: any) => setUsername(e.target.value)} />
-                                <div className="space-y-2.5">
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <InputField label="Username" value={username} onChange={(e: any) => setUsername(e.target.value)} />
+                                </div>
+                                <div className="flex flex-col gap-2.5 flex-1">
                                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Password</label>
                                     <div className="relative group">
                                         <input
                                             type={showPassword ? "text" : "password"}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full bg-[#121214] border border-white/5 rounded-xl px-5 py-3 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner"
+                                            className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
                                         />
                                         <button
                                             onClick={() => setShowPassword(!showPassword)}
@@ -441,7 +462,17 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 </div>
                             </div>
 
-                            <InputField label="Database Name" value={dbName} onChange={(e: any) => setDbName(e.target.value)} />
+                            {selectedService === 'Redis' && (
+                                <InputField label="Database Index" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="0" />
+                            )}
+                            {(selectedService === 'PostgreSQL' || selectedService === 'MySQL') && (
+                                <InputField label="Database Name" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="public" />
+                            )}
+                            {selectedService === 'MongoDB' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField label="Auth Database" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="admin" />
+                                </div>
+                            )}
                         </motion.div>
                     </motion.div>
                 </div>
@@ -463,10 +494,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <span>Cancel</span>
                     </motion.button>
                     <motion.button
-                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)' }}
+                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(22, 163, 74, 1)' }}
                         whileTap={{ scale: 0.98 }}
                         onClick={saveConnection}
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl text-gray-400 hover:text-white bg-white/5 border border-white/5 transition-all font-medium text-sm"
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
                     >
                         <Save size={18} />
                         <span>Save</span>
@@ -476,21 +507,26 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         whileTap={{ scale: 0.97 }}
                         onClick={handleConnectClick}
                         disabled={isConnecting}
-                        className="flex items-center gap-2.5 px-10 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_4px_20px_rgba(79,70,229,0.4)] hover:shadow-[0_6px_25px_rgba(79,70,229,0.5)] transition-all font-semibold text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2.5 px-10 py-3 rounded-xl border border-white/10 hover:border-white/20 text-gray-300 hover:text-white transition-all font-semibold text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <div className="flex relative items-center justify-center">
                             {isConnecting ? (
                                 <RefreshCw size={16} className="animate-spin" />
                             ) : (
-                                <>
-                                    <div className="w-2 h-2 rounded-full bg-white opacity-80 group-hover:animate-ping absolute" />
-                                    <div className="w-2 h-2 rounded-full bg-white" />
-                                </>
+                                <Activity size={18} className="text-blue-500 group-hover:text-blue-400" />
                             )}
                         </div>
-                        <span>{isConnecting ? 'Connecting...' : 'Connect Server'}</span>
+                        <span>{isConnecting ? 'Testing...' : 'Test Connection'}</span>
                     </motion.button>
                 </motion.div>
+
+                {/* Toast Notification */}
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    isVisible={toast.isVisible}
+                    onClose={hideToast}
+                />
             </div>
         </div>
     );
