@@ -15,8 +15,14 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST, CreateRectRgn, SetWindowRgn}; // Added imports
 
+use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, MySqlPool, PgPool};
+use mongodb::{options::ClientOptions, Client};
+
 struct AppState {
     redis_client: Mutex<Option<redis::Client>>,
+    mysql_pool: Mutex<Option<MySqlPool>>,
+    pg_pool: Mutex<Option<PgPool>>,
+    mongo_client: Mutex<Option<Client>>,
 }
 
 #[tauri::command]
@@ -112,7 +118,96 @@ async fn connect_redis(
     let _: () = redis::cmd("PING").query_async(&mut con).await.map_err(|e| e.to_string())?;
     
     *state.redis_client.lock().unwrap() = Some(client);
-    Ok("Connected".to_string())
+    Ok("Connected to Redis".to_string())
+}
+
+#[tauri::command]
+async fn connect_mysql(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    database: Option<String>,
+) -> Result<String, String> {
+    let db = database.unwrap_or_else(|| "mysql".to_string()); // Default to mysql db to test connection
+    let url = format!(
+        "mysql://{}:{}@{}:{}/{}",
+        username,
+        password.unwrap_or_default(),
+        host,
+        port,
+        db
+    );
+
+    let pool = MySqlPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    *state.mysql_pool.lock().unwrap() = Some(pool);
+    Ok("Connected to MySQL".to_string())
+}
+
+#[tauri::command]
+async fn connect_postgres(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    database: Option<String>,
+) -> Result<String, String> {
+    let db = database.unwrap_or_else(|| "postgres".to_string());
+    let url = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        username,
+        password.unwrap_or_default(),
+        host,
+        port,
+        db
+    );
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    *state.pg_pool.lock().unwrap() = Some(pool);
+    Ok("Connected to PostgreSQL".to_string())
+}
+
+#[tauri::command]
+async fn connect_mongodb(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    username: Option<String>,
+    password: Option<String>,
+) -> Result<String, String> {
+    let mut client_options = ClientOptions::parse(format!("mongodb://{}:{}", host, port))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let (Some(u), Some(p)) = (username, password) {
+         client_options.credential = Some(mongodb::options::Credential::builder()
+            .username(u)
+            .password(p)
+            .build());
+    }
+
+    let client = Client::with_options(client_options).map_err(|e| e.to_string())?;
+
+    // Ping the server
+    client
+        .list_database_names()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    *state.mongo_client.lock().unwrap() = Some(client);
+    Ok("Connected to MongoDB".to_string())
 }
 
 #[tauri::command]
@@ -195,12 +290,18 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .manage(AppState {
         redis_client: Mutex::new(None),
+        mysql_pool: Mutex::new(None),
+        pg_pool: Mutex::new(None),
+        mongo_client: Mutex::new(None),
     })
     .invoke_handler(tauri::generate_handler![
         greet, 
         update_click_region, 
         get_screen_work_area, 
         connect_redis, 
+        connect_mysql,
+        connect_postgres,
+        connect_mongodb,
         redis_get_keys, 
         redis_get_value, 
         redis_set_value,

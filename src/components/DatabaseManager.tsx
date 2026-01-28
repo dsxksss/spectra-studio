@@ -156,31 +156,52 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
     const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string) => {
         setIsConnecting(true);
-        if (service === 'Redis') {
-            try {
-                const res = await invoke('connect_redis', {
+        try {
+            let res;
+            const portNum = parseInt(portStr);
+            const passwordArg = passStr || null;
+            const usernameArg = username || '';
+
+            if (service === 'Redis') {
+                res = await invoke('connect_redis', {
                     host: hostStr,
-                    port: parseInt(portStr),
-                    password: passStr || null
+                    port: portNum,
+                    password: passwordArg
                 });
-                console.log(res);
-                showToast('Connection Successful', 'success');
-                if (onConnect) {
-                    onConnect(service);
-                }
-            } catch (err: any) {
-                console.error("Redis Connection Failed:", err);
-                showToast(`Connection Failed: ${err}`, 'error');
-            } finally {
-                setIsConnecting(false);
+            } else if (service === 'MySQL') {
+                res = await invoke('connect_mysql', {
+                    host: hostStr,
+                    port: portNum,
+                    username: usernameArg,
+                    password: passwordArg,
+                    database: dbName || null
+                });
+            } else if (service === 'PostgreSQL') {
+                res = await invoke('connect_postgres', {
+                    host: hostStr,
+                    port: portNum,
+                    username: usernameArg,
+                    password: passwordArg,
+                    database: dbName || null
+                });
+            } else if (service === 'MongoDB') {
+                res = await invoke('connect_mongodb', {
+                    host: hostStr,
+                    port: portNum,
+                    username: usernameArg || null,
+                    password: passwordArg
+                });
             }
-        } else {
-            // Mock connection for others for now
-            await new Promise(resolve => setTimeout(resolve, 800)); // Simulate delay
-            showToast(`${service} Connection Successful (Mock)`, 'success');
+
+            console.log(res);
+            showToast(`${service} Connection Successful`, 'success');
             if (onConnect) {
                 onConnect(service);
             }
+        } catch (err: any) {
+            console.error(`${service} Connection Failed:`, err);
+            showToast(`Connection Failed: ${err}`, 'error');
+        } finally {
             setIsConnecting(false);
         }
     };
