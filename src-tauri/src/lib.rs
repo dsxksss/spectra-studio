@@ -318,15 +318,36 @@ async fn postgres_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, 
 }
 
 #[tauri::command]
-async fn postgres_get_rows(state: State<'_, AppState>, table_name: String) -> Result<Vec<String>, String> {
+async fn postgres_get_rows(state: State<'_, AppState>, table_name: String, limit: i64, offset: i64) -> Result<Vec<String>, String> {
     let pool = {
         let guard = state.pg_pool.lock().unwrap();
         guard.clone().ok_or("Not connected")?
     };
 
-    // Safe to use table_name directly? Best practice is to quote it.
-    // We limit to 100 rows for performance in this demo
-    let q = format!("SELECT row_to_json(t)::text FROM (SELECT * FROM public.\"{}\" LIMIT 100) t", table_name);
+    // Fetch PK for stable sorting
+    let pk_q = "
+        SELECT kcu.column_name::text
+        FROM information_schema.key_column_usage kcu
+        JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name
+        WHERE kcu.table_schema = 'public'
+        AND kcu.table_name = $1
+        AND tc.constraint_type = 'PRIMARY KEY'
+        LIMIT 1
+    ";
+    
+    let pk_row: Option<(String,)> = sqlx::query_as(pk_q)
+        .bind(&table_name)
+        .fetch_optional(&pool)
+        .await
+        .unwrap_or(None);
+
+    let inner_q = if let Some((pk,)) = pk_row {
+        format!("SELECT * FROM public.\"{}\" ORDER BY \"{}\" ASC LIMIT {} OFFSET {}", table_name, pk, limit, offset)
+    } else {
+        format!("SELECT * FROM public.\"{}\" LIMIT {} OFFSET {}", table_name, limit, offset)
+    };
+
+    let q = format!("SELECT row_to_json(t)::text FROM ({}) t", inner_q);
     
     let rows: Vec<(String,)> = sqlx::query_as(&q)
         .fetch_all(&pool)
@@ -336,6 +357,84 @@ async fn postgres_get_rows(state: State<'_, AppState>, table_name: String) -> Re
     Ok(rows.into_iter().map(|(json,)| json).collect())
 }
 
+#[tauri::command]
+async fn postgres_get_count(state: State<'_, AppState>, table_name: String) -> Result<i64, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = format!("SELECT COUNT(*) FROM public.\"{}\"", table_name);
+    
+    let count: (i64,) = sqlx::query_as(&q)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(count.0)
+}
+
+
+#[tauri::command]
+async fn postgres_get_primary_key(state: State<'_, AppState>, table_name: String) -> Result<Option<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = "
+        SELECT kcu.column_name::text
+        FROM information_schema.key_column_usage kcu
+        JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name
+        WHERE kcu.table_schema = 'public'
+        AND kcu.table_name = $1
+        AND tc.constraint_type = 'PRIMARY KEY'
+        LIMIT 1
+    ";
+
+    let row: Option<(String,)> = sqlx::query_as(q)
+        .bind(table_name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(row.map(|(r,)| r))
+}
+
+#[tauri::command]
+async fn postgres_update_cell(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String, col_name: String, new_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // 1. Get column type to cast the input string correctly
+    let type_q = "SELECT udt_name::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2";
+    let type_row: Option<(String,)> = sqlx::query_as(type_q)
+        .bind(&table_name)
+        .bind(&col_name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // Default to text if not found (shouldn't happen for valid columns)
+    let col_type = type_row.map(|r| r.0).unwrap_or_else(|| "text".to_string());
+
+    // 2. Update with explicit cast
+    // We bind the new value as string ($1) and cast it to the target column type ($1::{col_type})
+    // This allows updating numeric, boolean, uuid, etc. columns with string input.
+    // We also cast PK to text ("{pk_col}"::text) to compare against stringified PK value.
+    let q = format!("UPDATE public.\"{}\" SET \"{}\" = $1::{} WHERE \"{}\"::text = $2", table_name, col_name, col_type, pk_col);
+
+    let result = sqlx::query(&q)
+        .bind(new_val)
+        .bind(pk_val)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(result.rows_affected())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -348,15 +447,18 @@ pub fn run() {
         mongo_client: Mutex::new(None),
     })
     .invoke_handler(tauri::generate_handler![
-        greet, 
-        update_click_region, 
-        get_screen_work_area, 
+        greet,
+        update_click_region,
+        get_screen_work_area,
         connect_redis, 
         connect_mysql,
         connect_postgres,
         connect_mongodb,
         postgres_get_tables,
         postgres_get_rows,
+        postgres_get_count,
+        postgres_get_primary_key,
+        postgres_update_cell,
         redis_get_keys, 
         redis_get_value, 
         redis_set_value,
