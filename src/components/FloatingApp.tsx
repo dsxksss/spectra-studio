@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
+import ClickSpark from "./ClickSpark";
 
 // UI 尺寸定义
 const UI_SIZES = {
@@ -264,12 +265,20 @@ export default function FloatingApp() {
                     transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
                 }}
             >
-                <div
-                    className="w-full h-full transition-opacity duration-150 ease-out"
-                    style={{ opacity: contentOpacity }}
+                <ClickSpark
+                    sparkColor='#fff'
+                    sparkSize={10}
+                    sparkRadius={15}
+                    sparkCount={8}
+                    duration={400}
                 >
-                    {renderContent()}
-                </div>
+                    <div
+                        className="w-full h-full transition-opacity duration-150 ease-out"
+                        style={{ opacity: contentOpacity }}
+                    >
+                        {renderContent()}
+                    </div>
+                </ClickSpark>
             </div>
         </div>
     );
