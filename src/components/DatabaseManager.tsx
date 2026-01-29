@@ -10,13 +10,11 @@ import {
     ChevronDown,
     Activity,
     Box,
-    Globe,
     Save,
     Play,
     RefreshCw,
     Pencil,
     Trash2,
-    FileJson
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
@@ -142,6 +140,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 if (parsed.timeout) setTimeoutSec(parsed.timeout);
             } catch (e) {
                 console.error("Failed to parse settings", e);
+                showToast("Failed to load settings", 'error');
             }
         }
     }, []);
@@ -175,6 +174,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 setSavedConnections(JSON.parse(saved));
             } catch (e) {
                 console.error("Failed to parse saved connections", e);
+                showToast("Failed to load saved connections", 'error');
             }
         }
     }, []);
@@ -465,10 +465,15 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 >
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                    conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                        conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                            'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
+                                            }`}>
                                             {(() => {
                                                 const IconComponent = getDatabaseIcon(conn.type);
-                                                return <IconComponent size={10} className={conn.type === 'Redis' ? 'text-red-400' : 'text-blue-400'} />;
+                                                return <IconComponent size={10} className={getDatabaseIconColor(conn.type)} />;
                                             })()}
                                             {conn.type}
                                         </span>
@@ -845,6 +850,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         </div>
                     )}
                 </AnimatePresence>
+
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    isVisible={toast.isVisible}
+                    onClose={hideToast}
+                />
             </div>
         </div>
     );
