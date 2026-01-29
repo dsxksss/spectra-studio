@@ -192,6 +192,18 @@ export default function FloatingApp() {
         }
     };
 
+    const getServiceColor = (service: string | null) => {
+        if (!service) return '#94a3b8'; // text-slate-400
+        switch (service) {
+            case 'Redis': return '#f87171'; // text-red-400
+            case 'PostgreSQL': return '#60a5fa'; // text-blue-400
+            case 'MySQL': return '#3b82f6'; // text-blue-500
+            case 'MongoDB': return '#10b981'; // text-emerald-500
+            case 'SQLite': return '#93c5fd'; // text-blue-300
+            default: return '#60a5fa';
+        }
+    };
+
     const getServiceIcon = (service: string | null, size = 18) => {
         if (!service) return <Database size={size} />;
         switch (service) {
@@ -279,23 +291,25 @@ export default function FloatingApp() {
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex flex-1 items-center gap-4 px-4 py-2 rounded-lg transition-colors ${connectedService ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 justify-center' : 'text-gray-400 hover:bg-white/5 hover:text-white justify-between group'}`}
+                            className={`flex flex-1 items-center gap-4 px-4 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 justify-center hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white justify-between group'}`}
                         >
                             <div className="flex items-center gap-2">
                                 {getServiceIcon(connectedService)}
-                                <span className="text-sm font-medium whitespace-nowrap">{connectedService ? `Connected to ${connectedService}` : 'Connect'}</span>
+                                <span className="text-sm font-medium truncate max-w-[220px]" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : 'Connect'}</span>
                             </div>
 
-                            {!connectedService && (
-                                <div className="flex items-center -space-x-2 mr-1">
-                                    {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
-                                        <div key={i} className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center border border-white/10 relative z-[1] transition-transform group-hover:scale-110" style={{ zIndex: 10 - i }}>
-                                            <Icon size={12} className="text-gray-400" />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </button>
+                            {
+                                !connectedService && (
+                                    <div className="flex items-center -space-x-2 mr-1">
+                                        {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
+                                            <div key={i} className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center border border-white/10 relative z-[1] transition-transform group-hover:scale-110" style={{ zIndex: 10 - i }}>
+                                                <Icon size={12} className="text-gray-400" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
+                            }
+                        </button >
                         <div className="w-[1px] h-6 bg-white/10" />
                         <div className="flex items-center gap-1">
                             <button onClick={() => handleChangeMode('collapsed')} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-white transition-colors">
@@ -305,7 +319,7 @@ export default function FloatingApp() {
                                 <X size={16} />
                             </button>
                         </div>
-                    </div>
+                    </div >
                 );
         }
     };

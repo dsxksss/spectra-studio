@@ -5,14 +5,14 @@ import {
     ChevronLeft,
     X,
     LogOut,
+    Table as TableIcon,
     AlertCircle,
     Eye,
     Pencil,
     Save,
     RotateCcw,
     AlertTriangle,
-    Key,
-    Type
+    Key
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
@@ -78,7 +78,7 @@ const ConfirmDialog = ({
 export default function RedisManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
-    const [keyValue, setKeyValue] = useState<string>(""); // Raw string from Redis
+    const [, setKeyValue] = useState<string>(""); // Raw string from Redis
     const [parsedData, setParsedData] = useState<any[]>([]); // Parsed for table
     const [filter, setFilter] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -160,6 +160,11 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
         try {
             const res = await invoke<string[]>('redis_get_keys', { pattern: filter || '*' });
             setKeys(res.sort());
+
+            // Automatically select the first key if available
+            if (res.length > 0) {
+                setSelectedKey(res[0]);
+            }
         } catch (err: any) {
             console.error("Failed to fetch keys", err);
             setError(typeof err === 'string' ? err : "Failed to fetch keys.");
@@ -380,69 +385,88 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
         }
 
         return (
-            <div className="flex-1 overflow-auto custom-scrollbar relative">
-                <table className="w-full text-left text-sm text-gray-300 border-collapse">
-                    <thead className="bg-[#18181b] sticky top-0 z-10 shadow-sm">
-                        <tr>
-                            <th className="px-3 py-2 border-b border-white/10 w-10 text-center text-xs font-mono text-gray-500 bg-[#18181b]">#</th>
-                            {columns.map(col => (
-                                <th
-                                    key={col}
-                                    className="px-3 py-2 border-b border-white/10 text-xs font-bold text-gray-400 uppercase tracking-wider relative group select-none bg-[#18181b]"
-                                    style={{ width: colWidths[col] || 'auto' }}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <Type size={10} className="text-blue-500/50" />
-                                        {col}
-                                    </div>
-                                    <div
-                                        className="absolute right-0 top-0 bottom-0 w-1 hover:bg-blue-500/50 cursor-col-resize transition-colors"
-                                        onMouseDown={(e) => startResize(e, col)}
-                                    />
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {parsedData.map((row, rowIdx) => {
-                            const rowChanges = pendingChanges[rowIdx] || {};
-                            const isRowDirty = Object.keys(rowChanges).length > 0;
+            <div className="flex flex-col h-full overflow-hidden p-6">
+                <div className="flex items-center gap-2 mb-3 px-1 text-xs text-gray-500 justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                        <TableIcon size={12} />
+                        <span>{parsedData.length} items {parsedData.length === 1 ? 'entry' : 'entries'} in this key</span>
+                    </div>
+                </div>
 
-                            return (
-                                <tr key={rowIdx} className={`group transition-colors ${isRowDirty ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-white/5'}`}>
-                                    <td className="px-3 py-2 text-center text-xs font-mono text-gray-600 border-r border-white/5 bg-[#18181b]/30">
-                                        {rowIdx + 1}
-                                    </td>
-                                    {columns.map((col, colIdx) => {
-                                        const val = rowChanges[col] !== undefined ? rowChanges[col] : row[col];
-                                        const isDirty = rowChanges[col] !== undefined;
+                <div className="flex-1 overflow-auto border border-white/5 rounded-xl bg-[#121214] shadow-inner custom-scrollbar relative mx-0.5">
+                    <table className="w-full text-left text-sm text-gray-400 border-collapse table-fixed">
+                        <thead className="bg-[#18181b] text-gray-200 font-medium sticky top-0 z-10">
+                            <tr>
+                                <th className="px-4 py-3 border-b border-white/10 w-12 text-center bg-[#18181b] z-20">#</th>
+                                {columns.map(col => {
+                                    const width = colWidths[col] || 150;
+                                    return (
+                                        <th
+                                            key={col}
+                                            className="px-4 py-3 border-b border-white/10 whitespace-nowrap bg-[#18181b] relative group"
+                                            style={{ width, minWidth: width, maxWidth: width }}
+                                        >
+                                            <div className="flex items-center justify-between overflow-hidden">
+                                                <span className="truncate" title={col}>{col}</span>
+                                            </div>
+                                            <div
+                                                className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/50 z-30 transition-colors"
+                                                onMouseDown={(e) => startResize(e, col)}
+                                            />
+                                        </th>
+                                    );
+                                })}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {parsedData.map((row, rowIdx) => {
+                                const rowChanges = pendingChanges[rowIdx] || {};
 
-                                        return (
-                                            <td key={`${rowIdx}-${col}`} className={`px-0 py-0 relative border-r border-white/5 last:border-0 p-0 ${isDirty ? 'bg-amber-900/20' : ''}`}>
-                                                {mode === 'edit' ? (
-                                                    <>
-                                                        <input
-                                                            type="text"
-                                                            value={val}
-                                                            onChange={(e) => handleInputChange(rowIdx, col, e.target.value)}
-                                                            className={`w-full h-full px-3 py-2 bg-transparent border-none outline-none focus:ring-1 focus:ring-inset focus:ring-blue-500/50 transition-all font-mono text-xs ${isDirty ? 'text-amber-200 font-medium' : 'text-gray-300'}`}
-                                                            spellCheck={false}
-                                                        />
-                                                        {isDirty && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-500 rounded-full pointer-events-none" />}
-                                                    </>
-                                                ) : (
-                                                    <div className={`px-3 py-2 truncate text-xs font-mono h-full block ${isDirty ? 'text-amber-200' : 'text-gray-300'}`} title={String(val)}>
-                                                        {String(val)}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                                return (
+                                    <tr key={rowIdx} className={`border-b border-white/5 transition-colors ${mode === 'edit' ? 'hover:bg-amber-500/5' : 'hover:bg-white/5'}`}>
+                                        <td className="px-4 py-2 font-mono text-xs opacity-50 text-center border-r border-white/5">
+                                            {rowIdx + 1}
+                                        </td>
+                                        {columns.map((col) => {
+                                            const width = colWidths[col] || 150;
+                                            const rowVal = row[col];
+                                            const editedVal = rowChanges[col];
+                                            const isDirty = editedVal !== undefined;
+                                            const val = isDirty ? editedVal : rowVal;
+
+                                            return (
+                                                <td
+                                                    key={`${rowIdx}-${col}`}
+                                                    className={`p-0 border-r border-white/5 last:border-0 relative ${isDirty ? 'bg-amber-900/20' : ''}`}
+                                                    style={{ width, minWidth: width, maxWidth: width }}
+                                                >
+                                                    {mode === 'edit' ? (
+                                                        <div className="relative w-full h-full">
+                                                            <input
+                                                                type="text"
+                                                                value={String(val ?? '')}
+                                                                onChange={(e) => handleInputChange(rowIdx, col, e.target.value)}
+                                                                className={`w-full h-full px-4 py-2 bg-transparent outline-none text-sm transition-colors truncate
+                                                                    ${isDirty ? 'text-amber-200 font-medium' : 'text-gray-300 focus:text-white focus:bg-white/5'}
+                                                                `}
+                                                                spellCheck={false}
+                                                            />
+                                                            {isDirty && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-amber-500 rounded-full m-1 pointer-events-none" />}
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`px-4 py-2 truncate text-sm transition-colors ${isDirty ? 'text-amber-200' : 'text-gray-300'}`} title={String(val ?? '')}>
+                                                            {String(val ?? '')}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     };
