@@ -146,7 +146,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const [isCustomName, setIsCustomName] = useState(false);
     const [host, setHost] = useState('localhost');
     const [port, setPort] = useState('5432');
-    const [username, setUsername] = useState('postgres');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [dbName, setDbName] = useState('postgres');
 
@@ -218,7 +218,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setConnectionName('New Connection');
         setHost('localhost');
         setPort('5432');
-        setUsername('postgres');
+        setUsername('');
         setPassword('');
         setDbName('postgres');
         setSelectedService('PostgreSQL');
@@ -265,6 +265,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
     const handleServiceChange = (service: string) => {
         setSelectedService(service);
+        setUsername('');
         switch (service) {
             case 'Redis':
                 setHost('127.0.0.1');
@@ -742,7 +743,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
                             <div className="flex gap-4">
                                 <div className="flex-1">
-                                    <InputField label="Username" value={username} onChange={(e: any) => setUsername(e.target.value)} />
+                                    <InputField label="Username" value={username} onChange={(e: any) => setUsername(e.target.value)} placeholder="Enter username" />
                                 </div>
                                 <div className="flex flex-col gap-2.5 flex-1">
                                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Password</label>
@@ -751,6 +752,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                             type={showPassword ? "text" : "password"}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="Enter password"
                                             className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
                                         />
                                         <button

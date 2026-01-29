@@ -29,7 +29,7 @@ import Silk from "./BG";
 // UI 尺寸定义
 const UI_SIZES = {
     collapsed: { w: 56, h: 56, r: 28 },
-    toolbar: { w: 420, h: 56, r: 28 },
+    toolbar: { w: 320, h: 56, r: 28 },
     expanded: { w: 1200, h: 800, r: 16 }
 };
 
@@ -285,15 +285,15 @@ export default function FloatingApp() {
             default:
 
                 return (
-                    <div className="flex items-center w-full h-full px-4 gap-3 bg-[#18181b]">
+                    <div className="flex items-center w-full h-full px-2 gap-1.5 bg-[#18181b]">
                         <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors" onPointerDown={handleDragStart}>
                             <GripVertical size={20} />
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex flex-1 items-center gap-4 px-4 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 justify-center hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white justify-between group'}`}
+                            className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                                 {getServiceIcon(connectedService)}
                                 <span className="text-sm font-medium truncate max-w-[220px]" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : 'Connect'}</span>
                             </div>

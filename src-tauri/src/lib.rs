@@ -524,12 +524,25 @@ async fn mysql_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, Str
         guard.clone().ok_or("Not connected")?
     };
 
-    let rows: Vec<(String,)> = sqlx::query_as("SHOW TABLES")
+    let rows = sqlx::query("SHOW TABLES")
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows.into_iter().map(|(name,)| name).collect())
+    let mut tables = Vec::new();
+    for row in rows {
+        // MySQL may return VARBINARY for table names in some configurations
+        // Try to get as bytes first, then convert to string
+        if let Ok(bytes) = row.try_get::<Vec<u8>, _>(0) {
+            if let Ok(name) = String::from_utf8(bytes) {
+                tables.push(name);
+            }
+        } else if let Ok(name) = row.try_get::<String, _>(0) {
+            tables.push(name);
+        }
+    }
+
+    Ok(tables)
 }
 
 #[tauri::command]
@@ -619,13 +632,20 @@ async fn mysql_get_primary_key(state: State<'_, AppState>, table_name: String) -
 
     let q = "SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = ? AND CONSTRAINT_NAME = 'PRIMARY' AND TABLE_SCHEMA = DATABASE() LIMIT 1";
     
-    let row: Option<(String,)> = sqlx::query_as(q)
+    let row = sqlx::query(q)
         .bind(table_name)
         .fetch_optional(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(row.map(|(r,)| r))
+    if let Some(r) = row {
+        if let Ok(bytes) = r.try_get::<Vec<u8>, _>(0) {
+            return Ok(String::from_utf8(bytes).ok());
+        } else if let Ok(name) = r.try_get::<String, _>(0) {
+            return Ok(Some(name));
+        }
+    }
+    Ok(None)
 }
 
 #[tauri::command]
@@ -968,13 +988,24 @@ async fn mysql_get_columns(state: State<'_, AppState>, table_name: String) -> Re
 
     let q = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
     
-    let rows: Vec<(String,)> = sqlx::query_as(q)
+    let rows = sqlx::query(q)
         .bind(table_name)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows.into_iter().map(|(name,)| name).collect())
+    let mut columns = Vec::new();
+    for row in rows {
+        if let Ok(bytes) = row.try_get::<Vec<u8>, _>(0) {
+            if let Ok(name) = String::from_utf8(bytes) {
+                columns.push(name);
+            }
+        } else if let Ok(name) = row.try_get::<String, _>(0) {
+            columns.push(name);
+        }
+    }
+
+    Ok(columns)
 }
 
 #[tauri::command]
