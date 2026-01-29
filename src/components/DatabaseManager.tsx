@@ -430,7 +430,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     onClick={() => loadConnection(conn)}
                                     onDoubleClick={() => handleDoubleClick(conn)}
                                     onContextMenu={(e) => handleContextMenu(e, conn)}
-                                    className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${connectionName === conn.name ? 'bg-white/5 border-white/10' : ''}`}
+                                    className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
