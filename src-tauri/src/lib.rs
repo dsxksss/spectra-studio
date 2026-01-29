@@ -576,26 +576,52 @@ async fn mysql_get_rows(state: State<'_, AppState>, table_name: String, limit: i
                      "TINYINT" | "SMALLINT" | "INT" | "BIGINT" => {
                          if let Ok(v) = row.try_get::<i64, _>(col.ordinal()) {
                             map.insert(name.to_string(), serde_json::Value::Number(v.into()));
-                         } else {
-                            let v: String = row.get(col.ordinal());
+                         } else if let Ok(bytes) = row.try_get::<Vec<u8>, _>(col.ordinal()) {
+                            let v = String::from_utf8_lossy(&bytes).to_string();
                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else if let Ok(v) = row.try_get::<String, _>(col.ordinal()) {
+                            map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else {
+                            map.insert(name.to_string(), serde_json::Value::Null);
                          }
                      },
                      "FLOAT" | "DOUBLE" | "DECIMAL" => {
                          if let Ok(v) = row.try_get::<f64, _>(col.ordinal()) {
                              map.insert(name.to_string(), serde_json::Value::from(v));
-                         } else {
-                             let v: String = row.get(col.ordinal());
+                         } else if let Ok(bytes) = row.try_get::<Vec<u8>, _>(col.ordinal()) {
+                             let v = String::from_utf8_lossy(&bytes).to_string();
                              map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else if let Ok(v) = row.try_get::<String, _>(col.ordinal()) {
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else {
+                             map.insert(name.to_string(), serde_json::Value::Null);
                          }
                      },
                      "BOOLEAN" => {
-                         let v: bool = row.get(col.ordinal());
-                         map.insert(name.to_string(), serde_json::Value::Bool(v));
+                         if let Ok(v) = row.try_get::<bool, _>(col.ordinal()) {
+                             map.insert(name.to_string(), serde_json::Value::Bool(v));
+                         } else {
+                             map.insert(name.to_string(), serde_json::Value::Null);
+                         }
+                     },
+                     "BINARY" | "VARBINARY" | "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
+                         if let Ok(bytes) = row.try_get::<Vec<u8>, _>(col.ordinal()) {
+                             let v = String::from_utf8_lossy(&bytes).to_string();
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else {
+                             map.insert(name.to_string(), serde_json::Value::Null);
+                         }
                      },
                      _ => {
-                         let v: String = row.get(col.ordinal());
-                         map.insert(name.to_string(), serde_json::Value::String(v));
+                         // Try bytes first for potential VARBINARY, then string
+                         if let Ok(bytes) = row.try_get::<Vec<u8>, _>(col.ordinal()) {
+                             let v = String::from_utf8_lossy(&bytes).to_string();
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else if let Ok(v) = row.try_get::<String, _>(col.ordinal()) {
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         } else {
+                             map.insert(name.to_string(), serde_json::Value::Null);
+                         }
                      }
                  }
             }
