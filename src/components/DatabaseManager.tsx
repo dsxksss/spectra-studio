@@ -58,35 +58,68 @@ type SavedConnection = {
     host: string;
     port: string;
     username: string;
-    environment: string;
     password?: string;
     database?: string;
 };
 
-const ServiceTypeButton = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
-    <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={onClick}
-        className={`flex items-center gap-3 px-6 py-4 rounded-xl border transition-all duration-300 ${active
-            ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
-            : 'bg-[#18181b]/50 border-white/5 text-gray-400 hover:border-white/10 hover:bg-white/5 hover:text-gray-200'
-            } flex-1 justify-center relative overflow-hidden group`}
-    >
-        <div className={`p-2 rounded-lg ${active ? 'bg-blue-500/20' : 'bg-white/5 group-hover:bg-white/10'} transition-colors`}>
-            <Icon size={20} />
+const ServiceSelect = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const services = [
+        { id: 'SQLite', icon: SQLiteIcon, color: 'text-blue-300' },
+        { id: 'PostgreSQL', icon: PostgresIcon, color: 'text-blue-400' },
+        { id: 'MySQL', icon: MySQLIcon, color: 'text-blue-500' },
+        { id: 'MongoDB', icon: MongoIcon, color: 'text-green-500' },
+        { id: 'Redis', icon: RedisIcon, color: 'text-red-400' }
+    ];
+
+    const selected = services.find(s => s.id === value) || services[0];
+    const Icon = selected.icon;
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full h-[46px] bg-[#18181b] border border-white/10 rounded-xl px-4 flex items-center justify-between text-white text-sm focus:outline-none focus:border-blue-500/50 transition-all shadow-sm hover:bg-white/5 active:scale-[0.99]"
+            >
+                <div className="flex items-center gap-3">
+                    <Icon size={18} className={selected.color} />
+                    <span className="font-medium">{selected.id}</span>
+                </div>
+                <ChevronDown size={16} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                            transition={{ duration: 0.1 }}
+                            className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1"
+                        >
+                            {services.map((service) => (
+                                <button
+                                    key={service.id}
+                                    onClick={() => {
+                                        onChange(service.id);
+                                        setIsOpen(false);
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${value === service.id ? 'bg-blue-500/10 text-blue-400' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                                >
+                                    <service.icon size={16} className={value === service.id ? service.color : 'text-gray-500'} />
+                                    <span>{service.id}</span>
+                                    {value === service.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                                </button>
+                            ))}
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
-        <span className="font-semibold tracking-wide">{label}</span>
-        {active && (
-            <motion.div
-                layoutId="active-glow"
-                className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-transparent"
-                initial={false}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-        )}
-    </motion.button>
-);
+    );
+};
 
 const InputField = ({ label, placeholder, type = "text", value, onChange, className = "" }: any) => (
     <div className={`flex flex-col gap-2.5 ${className}`}>
@@ -105,18 +138,17 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
 );
 
 export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
-    const [selectedService, setSelectedService] = useState(activeService || 'Redis');
+    const [selectedService, setSelectedService] = useState(activeService || 'SQLite');
     const [showPassword, setShowPassword] = useState(false);
 
     // Form State
     const [connectionName, setConnectionName] = useState('New Connection');
     const [isCustomName, setIsCustomName] = useState(false);
-    const [environment, setEnvironment] = useState('Development');
-    const [host, setHost] = useState('127.0.0.1');
-    const [port, setPort] = useState('6379');
+    const [host, setHost] = useState('data.db');
+    const [port, setPort] = useState('0');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [dbName, setDbName] = useState('0');
+    const [dbName, setDbName] = useState('');
 
     useEffect(() => {
         if (!isCustomName) {
@@ -184,13 +216,12 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const handleCreateNew = () => {
         setEditingId(null);
         setConnectionName('New Connection');
-        setEnvironment('Development');
-        setHost('127.0.0.1');
-        setPort('6379');
+        setHost('data.db');
+        setPort('0');
         setUsername('');
         setPassword('');
-        setDbName('0');
-        setSelectedService('Redis');
+        setDbName('');
+        setSelectedService('SQLite');
         setIsCustomName(false);
     };
 
@@ -204,7 +235,6 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             username,
             password,
             database: dbName,
-            environment
         };
 
         let newConnections;
@@ -230,7 +260,6 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setUsername(conn.username);
         setPassword(conn.password || '');
         setDbName(conn.database || '0');
-        setEnvironment(conn.environment);
         setIsCustomName(true);
     };
 
@@ -256,6 +285,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 setHost('127.0.0.1');
                 setPort('27017');
                 setDbName('admin');
+
                 break;
             case 'SQLite':
                 setPort('0');
@@ -290,7 +320,6 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         if (!conn) return;
 
         setConnectionName(conn.name);
-        setEnvironment(conn.environment);
         setHost(conn.host);
         setPort(conn.port);
         setUsername(conn.username);
@@ -298,7 +327,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         if (conn.database) setDbName(conn.database);
 
         // We set service which might reset defaults, so we need to be careful
-        // The handleServiceChange function resets port/dbName. 
+        // The handleServiceChange function resets port/dbName.
         // We should just set the state directly without calling handleServiceChange or call it then override.
         // But handleServiceChange is just a helper. Let's just set the state.
         setSelectedService(conn.type);
@@ -426,10 +455,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleCreateNew}
-                                className="w-5 h-5 flex items-center justify-center rounded bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white transition-all"
+                                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-gray-400 hover:text-white transition-all"
                                 title="Add New Connection"
                             >
-                                <Plus size={10} />
+                                <Plus size={14} />
                             </button>
                             <span className="bg-white/5 text-gray-500 px-2 py-0.5 rounded-full text-[10px] font-mono border border-white/5">{savedConnections.length}</span>
                         </div>
@@ -466,10 +495,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
                                         <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                    conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                        conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                            'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
+                                            conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                    conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                        'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
                                             }`}>
                                             {(() => {
                                                 const IconComponent = getDatabaseIcon(conn.type);
@@ -478,10 +507,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                             {conn.type}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${conn.environment === 'Production' ? 'bg-red-500' : (conn.environment === 'Staging' ? 'bg-yellow-500' : 'bg-emerald-500')}`} />
-                                        <span className="truncate">{conn.host}:{conn.port}</span>
-                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">                                </div>
 
                                     {/* Direct Connect Button */}
                                     <button
@@ -560,11 +586,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         transition={{ duration: 0.5, ease: "easeOut" }}
                         className="flex items-center gap-6"
                     >
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-[0_8px_32px_rgba(79,70,229,0.3)] ring-1 ring-white/20 relative group">
-                            <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="w-16 h-16 flex items-center justify-center">
                             {(() => {
                                 const IconComponent = getDatabaseIcon(selectedService);
-                                return <IconComponent size={32} className="text-white drop-shadow-md" />;
+                                return <IconComponent size={48} className={getDatabaseIconColor(selectedService)} />;
                             })()}
                         </div>
                         <div className="pt-1">
@@ -596,7 +621,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         className="space-y-8 mt-2"
                     >
 
-                        {/* Row 1: Name & Group */}
+                        {/* Row 1: Name & Database Type Dropdown */}
                         <div className="flex gap-4 px-8">
                             <div className="space-y-2.5 flex-[3]">
                                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Connection Name</label>
@@ -611,42 +636,9 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     className="w-full bg-[#18181b] border border-white/10 rounded-xl px-5 py-3 text-white text-sm focus:outline-none focus:border-blue-500/50 transition-all font-medium placeholder:text-gray-700 shadow-sm"
                                 />
                             </div>
-                            <div className="space-y-2.5 flex-[1]">
-                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Environment</label>
-                                <div className="relative">
-                                    <select
-                                        value={environment}
-                                        onChange={(e) => setEnvironment(e.target.value)}
-                                        className="w-full bg-[#18181b] border border-white/10 rounded-xl px-5 py-3 text-white text-sm appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-medium cursor-pointer shadow-sm"
-                                    >
-                                        <option>Development</option>
-                                        <option>Production</option>
-                                        <option>Staging</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Service Type */}
-                        <div className="space-y-4 px-8">
-                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Service Type</label>
-                            <div className="grid grid-cols-3 gap-3">
-                                {[
-                                    { id: 'PostgreSQL', icon: PostgresIcon },
-                                    { id: 'MySQL', icon: MySQLIcon },
-                                    { id: 'Redis', icon: RedisIcon },
-                                    { id: 'MongoDB', icon: MongoIcon },
-                                    { id: 'SQLite', icon: SQLiteIcon }
-                                ].map((service) => (
-                                    <ServiceTypeButton
-                                        key={service.id}
-                                        icon={service.icon}
-                                        label={service.id}
-                                        active={selectedService === service.id}
-                                        onClick={() => handleServiceChange(service.id)}
-                                    />
-                                ))}
+                            <div className="space-y-2.5 flex-[2]">
+                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Database Type</label>
+                                <ServiceSelect value={selectedService} onChange={handleServiceChange} />
                             </div>
                         </div>
 
@@ -735,12 +727,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 </div>
                             )}
                         </motion.div>
-                    </motion.div>
-                </div>
+                    </motion.div >
+                </div >
 
                 {/* Footer Actions */}
-                <motion.div
-                    initial={{ y: 100 }}
+                < motion.div
+                    initial={{ y: 100 }
+                    }
                     animate={{ y: 0 }}
                     transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 20 }}
                     className="px-10 py-6 border-t border-white/5 flex items-center justify-end gap-5 bg-[#09090b]/50 backdrop-blur-xl sticky bottom-0 z-20"
@@ -779,77 +772,79 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <Save size={18} />
                         <span>{editingId ? 'Update' : 'Save'}</span>
                     </motion.button>
-                </motion.div>
+                </motion.div >
 
                 {/* Settings Modal */}
                 <AnimatePresence>
-                    {showSettings && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center p-8">
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setShowSettings(false)}
-                                className="absolute inset-0 bg-black/60 backdrop-blur-md"
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                className="w-full max-w-md bg-[#121214] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden"
-                            >
-                                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#18181b]">
-                                    <h3 className="font-bold text-gray-200 flex items-center gap-2">
-                                        <Settings size={18} className="text-gray-500" />
-                                        Settings
-                                    </h3>
-                                    <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
-                                        <X size={18} />
-                                    </button>
-                                </div>
+                    {
+                        showSettings && (
+                            <div className="absolute inset-0 z-50 flex items-center justify-center p-8">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setShowSettings(false)}
+                                    className="absolute inset-0 bg-black/60 backdrop-blur-md"
+                                />
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    className="w-full max-w-md bg-[#121214] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden"
+                                >
+                                    <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#18181b]">
+                                        <h3 className="font-bold text-gray-200 flex items-center gap-2">
+                                            <Settings size={18} className="text-gray-500" />
+                                            Settings
+                                        </h3>
+                                        <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
+                                            <X size={18} />
+                                        </button>
+                                    </div>
 
-                                <div className="p-6 space-y-6">
-                                    <div className="space-y-4">
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Connection Settings</h4>
+                                    <div className="p-6 space-y-6">
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Connection Settings</h4>
 
-                                        <div className="space-y-2.5">
-                                            <div className="flex justify-between text-sm text-gray-300">
-                                                <span>Connection Timeout</span>
-                                                <span className="font-mono text-blue-400">{timeoutSec}s</span>
+                                            <div className="space-y-2.5">
+                                                <div className="flex justify-between text-sm text-gray-300">
+                                                    <span>Connection Timeout</span>
+                                                    <span className="font-mono text-blue-400">{timeoutSec}s</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="60"
+                                                    value={timeoutSec}
+                                                    onChange={(e) => setTimeoutSec(parseInt(e.target.value))}
+                                                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
+                                                />
+                                                <p className="text-[10px] text-gray-500">
+                                                    Timeout duration for database connection attempts (1-60 seconds).
+                                                </p>
                                             </div>
-                                            <input
-                                                type="range"
-                                                min="1"
-                                                max="60"
-                                                value={timeoutSec}
-                                                onChange={(e) => setTimeoutSec(parseInt(e.target.value))}
-                                                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
-                                            />
-                                            <p className="text-[10px] text-gray-500">
-                                                Timeout duration for database connection attempts (1-60 seconds).
-                                            </p>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="p-4 border-t border-white/5 bg-[#18181b]/50 flex justify-end gap-3 glass">
-                                    <button
-                                        onClick={() => setShowSettings(false)}
-                                        className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={saveSettings}
-                                        className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                                    >
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
+                                    <div className="p-4 border-t border-white/5 bg-[#18181b]/50 flex justify-end gap-3 glass">
+                                        <button
+                                            onClick={() => setShowSettings(false)}
+                                            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={saveSettings}
+                                            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                        >
+                                            Save Changes
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )
+                    }
+                </AnimatePresence >
 
                 <Toast
                     message={toast.message}
@@ -857,7 +852,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     isVisible={toast.isVisible}
                     onClose={hideToast}
                 />
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
