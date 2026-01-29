@@ -16,7 +16,7 @@ import {
     Pencil,
     Trash2,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
 import {
@@ -483,43 +483,91 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             </button>
                         </motion.div>
                     ) : (
-                        <div className="px-3 space-y-1">
-                            {filteredConnections.map(conn => (
-                                <div
-                                    key={conn.id}
-                                    onClick={() => loadConnection(conn)}
-                                    onDoubleClick={() => handleDoubleClick(conn)}
-                                    onContextMenu={(e) => handleContextMenu(e, conn)}
-                                    className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 ' + getDatabaseIconColor(conn.type) :
-                                            conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                    conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
-                                                        'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
-                                            }`}>
-                                            {(() => {
-                                                const IconComponent = getDatabaseIcon(conn.type);
-                                                return <IconComponent size={10} className={getDatabaseIconColor(conn.type)} />;
-                                            })()}
-                                            {conn.type}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500">                                </div>
-
-                                    {/* Direct Connect Button */}
-                                    <button
-                                        onClick={(e) => handleSavedConnect(e, conn)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
-                                        title="Connect Now"
+                        searchQuery ? (
+                            <div className="px-3 space-y-1">
+                                {filteredConnections.map(conn => (
+                                    <div
+                                        key={conn.id}
+                                        onClick={() => loadConnection(conn)}
+                                        onDoubleClick={() => handleDoubleClick(conn)}
+                                        onContextMenu={(e) => handleContextMenu(e, conn)}
+                                        className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
                                     >
-                                        <Play size={14} fill="currentColor" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                    conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                        conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                            'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
+                                                }`}>
+                                                {(() => {
+                                                    const IconComponent = getDatabaseIcon(conn.type);
+                                                    return <IconComponent size={10} className={getDatabaseIconColor(conn.type)} />;
+                                                })()}
+                                                {conn.type}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                            <span className="truncate">{conn.host}:{conn.port}</span>
+                                        </div>
+
+                                        {/* Direct Connect Button */}
+                                        <button
+                                            onClick={(e) => handleSavedConnect(e, conn)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
+                                            title="Connect Now"
+                                        >
+                                            <Play size={14} fill="currentColor" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <Reorder.Group axis="y" values={savedConnections} onReorder={(newOrder) => {
+                                setSavedConnections(newOrder);
+                                localStorage.setItem('spectra_saved_connections', JSON.stringify(newOrder));
+                            }} className="px-3 space-y-1">
+                                {savedConnections.map(conn => (
+                                    <Reorder.Item key={conn.id} value={conn}>
+                                        <div
+                                            onClick={() => loadConnection(conn)}
+                                            onDoubleClick={() => handleDoubleClick(conn)}
+                                            onContextMenu={(e) => handleContextMenu(e, conn)}
+                                            className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
+                                        >
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                    conn.type === 'MySQL' ? 'bg-orange-500/10 border-orange-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                        conn.type === 'MongoDB' ? 'bg-green-500/10 border-green-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                            conn.type === 'SQLite' ? 'bg-cyan-500/10 border-cyan-500/20 ' + getDatabaseIconColor(conn.type) :
+                                                                'bg-blue-500/10 border-blue-500/20 ' + getDatabaseIconColor(conn.type)
+                                                    }`}>
+                                                    {(() => {
+                                                        const IconComponent = getDatabaseIcon(conn.type);
+                                                        return <IconComponent size={10} className={getDatabaseIconColor(conn.type)} />;
+                                                    })()}
+                                                    {conn.type}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                <span className="truncate">{conn.host}:{conn.port}</span>
+                                            </div>
+
+                                            {/* Direct Connect Button */}
+                                            <button
+                                                onClick={(e) => handleSavedConnect(e, conn)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
+                                                title="Connect Now"
+                                            >
+                                                <Play size={14} fill="currentColor" />
+                                            </button>
+                                        </div>
+                                    </Reorder.Item>
+                                ))}
+                            </Reorder.Group>
+                        )
                     )}
                 </div>
                 {/* Context Menu */}
