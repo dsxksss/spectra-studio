@@ -469,6 +469,136 @@ async fn redis_del_key(state: State<'_, AppState>, key: String) -> Result<(), St
 }
 
 #[tauri::command]
+async fn mysql_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SHOW TABLES")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn mysql_get_rows(state: State<'_, AppState>, table_name: String, limit: i64, offset: i64) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = format!("SELECT * FROM `{}` LIMIT {} OFFSET {}", table_name, limit, offset);
+    
+    let rows = sqlx::query(&q)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut json_rows = Vec::new();
+    for row in rows {
+        let mut map = serde_json::Map::new();
+        for col in row.columns() {
+            let name = col.name();
+            // MySQL Types: Try to get as specific types or fallback to string
+            let raw_val = row.try_get_raw(col.ordinal()).unwrap();
+            
+            if raw_val.is_null() {
+                map.insert(name.to_string(), serde_json::Value::Null);
+            } else {
+                 let type_info = raw_val.type_info();
+                 let type_name = type_info.name();
+                 match type_name {
+                     "TINYINT" | "SMALLINT" | "INT" | "BIGINT" => {
+                         if let Ok(v) = row.try_get::<i64, _>(col.ordinal()) {
+                            map.insert(name.to_string(), serde_json::Value::Number(v.into()));
+                         } else {
+                            let v: String = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::String(v));
+                         }
+                     },
+                     "FLOAT" | "DOUBLE" | "DECIMAL" => {
+                         if let Ok(v) = row.try_get::<f64, _>(col.ordinal()) {
+                             map.insert(name.to_string(), serde_json::Value::from(v));
+                         } else {
+                             let v: String = row.get(col.ordinal());
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         }
+                     },
+                     "BOOLEAN" => {
+                         let v: bool = row.get(col.ordinal());
+                         map.insert(name.to_string(), serde_json::Value::Bool(v));
+                     },
+                     _ => {
+                         let v: String = row.get(col.ordinal());
+                         map.insert(name.to_string(), serde_json::Value::String(v));
+                     }
+                 }
+            }
+        }
+        json_rows.push(serde_json::Value::Object(map).to_string());
+    }
+
+    Ok(json_rows)
+}
+
+#[tauri::command]
+async fn mysql_get_count(state: State<'_, AppState>, table_name: String) -> Result<i64, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = format!("SELECT COUNT(*) FROM `{}`", table_name);
+    
+    let count: (i64,) = sqlx::query_as(&q)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(count.0)
+}
+
+#[tauri::command]
+async fn mysql_get_primary_key(state: State<'_, AppState>, table_name: String) -> Result<Option<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = "SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = ? AND CONSTRAINT_NAME = 'PRIMARY' AND TABLE_SCHEMA = DATABASE() LIMIT 1";
+    
+    let row: Option<(String,)> = sqlx::query_as(q)
+        .bind(table_name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(row.map(|(r,)| r))
+}
+
+#[tauri::command]
+async fn mysql_update_cell(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String, col_name: String, new_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = format!("UPDATE `{}` SET `{}` = ? WHERE `{}` = ?", table_name, col_name, pk_col);
+
+    let result = sqlx::query(&q)
+        .bind(new_val)
+        .bind(pk_val)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
 async fn postgres_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let pool = {
         let guard = state.pg_pool.lock().unwrap();
@@ -622,6 +752,11 @@ pub fn run() {
         connect_postgres,
         connect_mongodb,
         connect_sqlite,
+        mysql_get_tables,
+        mysql_get_rows,
+        mysql_get_count,
+        mysql_get_primary_key,
+        mysql_update_cell,
         postgres_get_tables,
         postgres_get_rows,
         postgres_get_count,

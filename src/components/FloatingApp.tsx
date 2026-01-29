@@ -23,6 +23,8 @@ import { useCustomDrag } from "../hooks/useCustomDrag";
 import ClickSpark from "./ClickSpark";
 import Silk from "./BG";
 
+import MySQLManager from "./MySQLManager";
+
 // UI 尺寸定义
 const UI_SIZES = {
     collapsed: { w: 56, h: 56, r: 28 },
@@ -230,6 +232,12 @@ export default function FloatingApp() {
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
                                 />
+                            ) : connectedService === 'MySQL' ? (
+                                <MySQLManager
+                                    onClose={() => handleChangeMode('toolbar')}
+                                    onDisconnect={() => setConnectedService(null)}
+                                    onDragStart={handleDragStart}
+                                />
                             ) : connectedService ? (
                                 <PostgresManager
                                     onClose={() => handleChangeMode('toolbar')}
@@ -240,7 +248,7 @@ export default function FloatingApp() {
                             ) : (
                                 <DatabaseManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onConnect={(s) => setConnectedService(s)}
+                                    onConnect={(s: string) => setConnectedService(s)}
                                     activeService={connectedService}
                                     onDragStart={handleDragStart}
                                 />
@@ -249,6 +257,7 @@ export default function FloatingApp() {
                     </div>
                 );
             default:
+
                 return (
                     <div className="flex items-center w-full h-full px-4 gap-3 bg-[#18181b]">
                         <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors" onPointerDown={handleDragStart}>

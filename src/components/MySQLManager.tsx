@@ -75,7 +75,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function PostgresManager({ onClose, onDisconnect, onDragStart, serviceType }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, serviceType: string }) {
+export default function MySQLManager({ onClose, onDisconnect, onDragStart }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
@@ -167,16 +167,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
         setIsLoading(true);
         setError(null);
         try {
-            let res: string[] = [];
-            if (serviceType === 'PostgreSQL') {
-                res = await invoke<string[]>('postgres_get_tables');
-            } else if (serviceType === 'SQLite') {
-                res = await invoke<string[]>('sqlite_get_tables');
-            } else if (serviceType === 'SQLite') {
-                res = await invoke<string[]>('sqlite_get_tables');
-            } else {
-                res = [];
-            }
+            const res = await invoke<string[]>('mysql_get_tables');
             setKeys(res.sort());
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
@@ -191,19 +182,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
         setIsLoading(true);
         try {
             const offset = (p - 1) * pageSize;
-            if (serviceType === 'PostgreSQL') {
-                // Backend expects i64, JS number is fine (tauri converts)
-                const res = await invoke<string[]>('postgres_get_rows', { tableName: table, limit: pageSize, offset });
-                setKeyValue(`[${res.join(',')}]`);
-            } else if (serviceType === 'SQLite') {
-                const res = await invoke<string[]>('sqlite_get_rows', { tableName: table, limit: pageSize, offset });
-                setKeyValue(`[${res.join(',')}]`);
-            } else if (serviceType === 'SQLite') {
-                const res = await invoke<string[]>('sqlite_get_rows', { tableName: table, limit: pageSize, offset });
-                setKeyValue(`[${res.join(',')}]`);
-            } else {
-                setKeyValue("[]");
-            }
+            const res = await invoke<string[]>('mysql_get_rows', { tableName: table, limit: pageSize, offset });
+            setKeyValue(`[${res.join(',')}]`);
         } catch (err) {
             console.error(err);
             setKeyValue("Error loading data");
@@ -215,10 +195,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
 
     const fetchCount = async (table: string) => {
         try {
-            if (serviceType === 'PostgreSQL') {
-                const count = await invoke<number>('postgres_get_count', { tableName: table });
-                setTotalRows(count);
-            }
+            const count = await invoke<number>('mysql_get_count', { tableName: table });
+            setTotalRows(count);
         } catch (e) {
             console.error("Failed to fetch count", e);
         }
@@ -226,13 +204,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
 
     const fetchPrimaryKey = async (table: string) => {
         try {
-            if (serviceType === 'PostgreSQL') {
-                const pk = await invoke<string | null>('postgres_get_primary_key', { tableName: table });
-                setPrimaryKey(pk);
-            } else if (serviceType === 'SQLite') {
-                const pk = await invoke<string | null>('sqlite_get_primary_key', { tableName: table });
-                setPrimaryKey(pk);
-            }
+            const pk = await invoke<string | null>('mysql_get_primary_key', { tableName: table });
+            setPrimaryKey(pk);
         } catch (e) {
             console.error("Failed to fetch PK", e);
             setPrimaryKey(null);
@@ -433,8 +406,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
     const executeBatchUpdate = async (updates: any[]) => {
         setIsSaving(true);
         try {
-            let command = 'postgres_update_cell';
-            if (serviceType === 'SQLite') command = 'sqlite_update_cell';
+            const command = 'mysql_update_cell';
 
             const results = await Promise.all(updates.map(u => invoke<number>(command, u)));
             const totalRowsAffected = results.reduce((sum, current) => sum + current, 0);
@@ -603,10 +575,10 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                 <div className="p-4 border-b border-white/5 cursor-move" onPointerDown={onDragStart}>
                     <div className="flex items-center justify-between mb-4 px-2">
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
                                 <Database size={18} />
                             </div>
-                            <span className="font-bold text-white tracking-wide">Database Explorer</span>
+                            <span className="font-bold text-white tracking-wide">MySQL Manager</span>
                         </div>
                     </div>
 
@@ -646,7 +618,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                                 key={key}
                                 onClick={() => setSelectedKey(key)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left transition-all ${selectedKey === key
-                                    ? 'bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20'
+                                    ? 'bg-orange-500/10 text-orange-400 font-medium border border-orange-500/20'
                                     : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
                                     }`}
                             >
@@ -692,7 +664,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                             <div className="flex items-center gap-2 bg-[#18181b] rounded-lg p-1 border border-white/10 mr-2">
                                 <button
                                     onClick={requestOutMode}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                 >
                                     <Eye size={12} /> View
                                 </button>
@@ -751,7 +723,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                     {selectedKey ? (
                         <div className="flex-1 flex flex-col min-h-0 bg-[#121214] border border-white/5 rounded-xl shadow-inner overflow-hidden p-1">
                             {isLoading ? (
-                                <div className="flex items-center justify-center h-full text-blue-400 gap-2">
+                                <div className="flex items-center justify-center h-full text-orange-400 gap-2">
                                     <RefreshCw className="animate-spin" /> Loading data...
                                 </div>
                             ) : (
