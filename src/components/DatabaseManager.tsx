@@ -137,18 +137,18 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
     </div>
 );
 
-export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
-    const [selectedService, setSelectedService] = useState(activeService || 'SQLite');
+export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
+    const [selectedService, setSelectedService] = useState(activeService || 'PostgreSQL');
     const [showPassword, setShowPassword] = useState(false);
 
     // Form State
     const [connectionName, setConnectionName] = useState('New Connection');
     const [isCustomName, setIsCustomName] = useState(false);
-    const [host, setHost] = useState('data.db');
-    const [port, setPort] = useState('0');
-    const [username, setUsername] = useState('');
+    const [host, setHost] = useState('localhost');
+    const [port, setPort] = useState('5432');
+    const [username, setUsername] = useState('postgres');
     const [password, setPassword] = useState('');
-    const [dbName, setDbName] = useState('');
+    const [dbName, setDbName] = useState('postgres');
 
     useEffect(() => {
         if (!isCustomName) {
@@ -216,12 +216,12 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const handleCreateNew = () => {
         setEditingId(null);
         setConnectionName('New Connection');
-        setHost('data.db');
-        setPort('0');
-        setUsername('');
+        setHost('localhost');
+        setPort('5432');
+        setUsername('postgres');
         setPassword('');
-        setDbName('');
-        setSelectedService('SQLite');
+        setDbName('postgres');
+        setSelectedService('PostgreSQL');
         setIsCustomName(false);
     };
 
@@ -398,7 +398,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             console.log(res);
             showToast(`${service} Connection Successful`, 'success');
             if (!isTestOnly && onConnect) {
-                onConnect(service);
+                onConnect(service, connectionName || 'Unsaved Connection');
             }
         } catch (err: any) {
             console.error(`${service} Connection Failed:`, err);

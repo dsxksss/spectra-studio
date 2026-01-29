@@ -3,8 +3,7 @@ import {
     X,
     Minus,
     GripVertical,
-    Database,
-    FileJson
+    Database
 } from "lucide-react";
 import {
     RedisIcon,
@@ -19,11 +18,13 @@ import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
 import PostgresManager from "./PostgresManager";
+import MySQLManager from "./MySQLManager";
+import SQLiteManager from "./SQLiteManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
 import ClickSpark from "./ClickSpark";
 import Silk from "./BG";
 
-import MySQLManager from "./MySQLManager";
+
 
 // UI 尺寸定义
 const UI_SIZES = {
@@ -37,6 +38,7 @@ const ANIMATION_DURATION = 300;
 export default function FloatingApp() {
     const [viewMode, setViewMode] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [connectedService, setConnectedService] = useState<string | null>(null);
+    const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
     const [visibleContent, setVisibleContent] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [contentOpacity, setContentOpacity] = useState(1);
 
@@ -231,24 +233,36 @@ export default function FloatingApp() {
                                     onClose={() => handleChangeMode('toolbar')}
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
+                                    connectionName={currentConnectionName}
                                 />
                             ) : connectedService === 'MySQL' ? (
                                 <MySQLManager
                                     onClose={() => handleChangeMode('toolbar')}
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
+                                    connectionName={currentConnectionName}
+                                />
+                            ) : connectedService === 'SQLite' ? (
+                                <SQLiteManager
+                                    onClose={() => handleChangeMode('toolbar')}
+                                    onDisconnect={() => setConnectedService(null)}
+                                    onDragStart={handleDragStart}
+                                    connectionName={currentConnectionName}
                                 />
                             ) : connectedService ? (
                                 <PostgresManager
                                     onClose={() => handleChangeMode('toolbar')}
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
-                                    serviceType={connectedService}
+                                    connectionName={currentConnectionName}
                                 />
                             ) : (
                                 <DatabaseManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onConnect={(s: string) => setConnectedService(s)}
+                                    onConnect={(s: string, n: string) => {
+                                        setConnectedService(s);
+                                        setCurrentConnectionName(n);
+                                    }}
                                     activeService={connectedService}
                                     onDragStart={handleDragStart}
                                 />

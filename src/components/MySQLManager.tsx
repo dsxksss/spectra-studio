@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Search,
-    Database,
     RefreshCw,
     ChevronRight,
     ChevronLeft,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
+import { MySQLIcon } from './icons';
 
 // Internal Confirm Dialog Component
 const ConfirmDialog = ({
@@ -75,7 +75,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function MySQLManager({ onClose, onDisconnect, onDragStart }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void }) {
+export default function MySQLManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
@@ -169,6 +169,11 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart }: { o
         try {
             const res = await invoke<string[]>('mysql_get_tables');
             setKeys(res.sort());
+
+            // Automatically select the first table if available
+            if (res.length > 0) {
+                setSelectedKey(res[0]);
+            }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
             setError(typeof err === 'string' ? err : "Failed to fetch tables.");
@@ -576,9 +581,12 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart }: { o
                     <div className="flex items-center justify-between mb-4 px-2">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
-                                <Database size={18} />
+                                <MySQLIcon size={18} />
                             </div>
-                            <span className="font-bold text-white tracking-wide">MySQL Manager</span>
+                            <div className="flex flex-col min-w-0 max-w-[210px]">
+                                <span className="font-bold text-white text-sm truncate" title={connectionName}>{connectionName || 'MySQL Manager'}</span>
+                                <span className="text-[10px] text-orange-400/80 font-mono">MySQL</span>
+                            </div>
                         </div>
                     </div>
 

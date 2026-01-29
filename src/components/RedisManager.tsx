@@ -1,13 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Search,
-    Database,
     RefreshCw,
-    ChevronRight,
     ChevronLeft,
     X,
     LogOut,
-    Table as TableIcon,
     AlertCircle,
     Eye,
     Pencil,
@@ -15,12 +12,11 @@ import {
     RotateCcw,
     AlertTriangle,
     Key,
-    Type,
-    Plus,
-    Trash2
+    Type
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
+import { RedisIcon } from './icons';
 
 // Internal Confirm Dialog Component
 const ConfirmDialog = ({
@@ -79,7 +75,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function RedisManager({ onClose, onDisconnect, onDragStart }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void }) {
+export default function RedisManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>(""); // Raw string from Redis
@@ -356,7 +352,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
         if (isLoading && parsedData.length === 0) {
             return (
                 <div className="flex flex-col items-center justify-center h-64 text-gray-500 animate-pulse">
-                    <Database size={32} className="mb-4 opacity-50" />
+                    <RedisIcon size={32} className="mb-4 opacity-50" />
                     <p className="text-sm font-medium">Loading data...</p>
                 </div>
             );
@@ -456,6 +452,17 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
             {/* Sidebar (Keys) */}
             <div className="w-64 bg-[#0c0c0e]/50 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
                 <div className="p-3 border-b border-white/5 cursor-move" onPointerDown={onDragStart}>
+                    <div className="flex items-center justify-between mb-4 px-1">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 flex items-center justify-center">
+                                <RedisIcon size={18} />
+                            </div>
+                            <div className="flex flex-col min-w-0 max-w-[160px]">
+                                <span className="font-bold text-white text-sm truncate" title={connectionName}>{connectionName || 'Redis Manager'}</span>
+                                <span className="text-[10px] text-red-400/80 font-mono">Redis</span>
+                            </div>
+                        </div>
+                    </div>
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={14} />
                         <input
@@ -510,7 +517,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
                         </button>
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                                <Database size={18} className="text-blue-400" />
+                                <RedisIcon size={18} className="text-blue-400" />
                             </div>
                             <div>
                                 <h2 className="text-sm font-bold text-gray-200 flex items-center gap-2">
