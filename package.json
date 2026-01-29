@@ -18,6 +18,7 @@
         "lucide-react": "^0.300.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
+        "simple-icons": "^16.6.1",
         "three": "^0.160.1"
     },
     "devDependencies": {

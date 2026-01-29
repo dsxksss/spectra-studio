@@ -21,6 +21,37 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
+import {
+    RedisIcon,
+    PostgresIcon,
+    MySQLIcon,
+    MongoIcon,
+    SQLiteIcon
+} from "./icons";
+
+// Helper function to get icon component by database type
+const getDatabaseIcon = (type: string) => {
+    switch (type) {
+        case 'Redis': return RedisIcon;
+        case 'PostgreSQL': return PostgresIcon;
+        case 'MySQL': return MySQLIcon;
+        case 'MongoDB': return MongoIcon;
+        case 'SQLite': return SQLiteIcon;
+        default: return Database;
+    }
+};
+
+// Helper function to get icon color by database type
+const getDatabaseIconColor = (type: string) => {
+    switch (type) {
+        case 'Redis': return 'text-red-400';
+        case 'PostgreSQL': return 'text-blue-400';
+        case 'MySQL': return 'text-orange-400';
+        case 'MongoDB': return 'text-green-400';
+        case 'SQLite': return 'text-cyan-400';
+        default: return 'text-blue-400';
+    }
+};
 
 type SavedConnection = {
     id: string;
@@ -434,7 +465,11 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 >
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-medium text-sm text-gray-200 group-hover:text-white truncate max-w-[120px]">{conn.name}</span>
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-tighter shrink-0 flex items-center gap-1 ${conn.type === 'Redis' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'}`}>
+                                            {(() => {
+                                                const IconComponent = getDatabaseIcon(conn.type);
+                                                return <IconComponent size={10} className={conn.type === 'Redis' ? 'text-red-400' : 'text-blue-400'} />;
+                                            })()}
                                             {conn.type}
                                         </span>
                                     </div>
@@ -522,7 +557,10 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     >
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-[0_8px_32px_rgba(79,70,229,0.3)] ring-1 ring-white/20 relative group">
                             <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <Database size={32} className="text-white drop-shadow-md" />
+                            {(() => {
+                                const IconComponent = getDatabaseIcon(selectedService);
+                                return <IconComponent size={32} className="text-white drop-shadow-md" />;
+                            })()}
                         </div>
                         <div className="pt-1">
                             <h1 className="text-3xl font-bold text-white mb-1.5 tracking-tight flex items-center gap-3">
@@ -589,13 +627,19 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <div className="space-y-4 px-8">
                             <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Service Type</label>
                             <div className="grid grid-cols-3 gap-3">
-                                {['PostgreSQL', 'MySQL', 'Redis', 'MongoDB', 'SQLite'].map((service) => (
+                                {[
+                                    { id: 'PostgreSQL', icon: PostgresIcon },
+                                    { id: 'MySQL', icon: MySQLIcon },
+                                    { id: 'Redis', icon: RedisIcon },
+                                    { id: 'MongoDB', icon: MongoIcon },
+                                    { id: 'SQLite', icon: SQLiteIcon }
+                                ].map((service) => (
                                     <ServiceTypeButton
-                                        key={service}
-                                        icon={service === 'Redis' ? Activity : (service === 'MongoDB' ? Globe : (service === 'SQLite' ? FileJson : Database))}
-                                        label={service}
-                                        active={selectedService === service}
-                                        onClick={() => handleServiceChange(service)}
+                                        key={service.id}
+                                        icon={service.icon}
+                                        label={service.id}
+                                        active={selectedService === service.id}
+                                        onClick={() => handleServiceChange(service.id)}
                                     />
                                 ))}
                             </div>
@@ -801,15 +845,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         </div>
                     )}
                 </AnimatePresence>
-
-                {/* Toast Notification */}
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    isVisible={toast.isVisible}
-                    onClose={hideToast}
-                />
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }

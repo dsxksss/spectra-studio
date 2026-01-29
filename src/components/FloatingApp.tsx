@@ -6,6 +6,14 @@ import {
     Database,
     FileJson
 } from "lucide-react";
+import {
+    RedisIcon,
+    PostgresIcon,
+    MySQLIcon,
+    MongoIcon,
+    MongoIconSingle,
+    SQLiteIcon
+} from "./icons";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
@@ -182,8 +190,14 @@ export default function FloatingApp() {
 
     const getServiceIcon = (service: string | null, size = 18) => {
         if (!service) return <Database size={size} />;
-        if (service === 'SQLite') return <FileJson size={size} className="text-blue-400" />;
-        return <Database size={size} className={service ? "text-blue-400" : ""} />;
+        switch (service) {
+            case 'Redis': return <RedisIcon size={size} className="text-red-400" />;
+            case 'PostgreSQL': return <PostgresIcon size={size} className="text-blue-400" />;
+            case 'MySQL': return <MySQLIcon size={size} className="text-blue-500" />;
+            case 'MongoDB': return <MongoIcon size={size} />;
+            case 'SQLite': return <SQLiteIcon size={size} className="text-blue-300" />;
+            default: return <Database size={size} className="text-blue-400" />;
+        }
     };
 
     const renderContent = () => {
@@ -242,10 +256,22 @@ export default function FloatingApp() {
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${connectedService ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                            className={`flex flex-1 items-center gap-4 px-4 py-2 rounded-lg transition-colors ${connectedService ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 justify-center' : 'text-gray-400 hover:bg-white/5 hover:text-white justify-between group'}`}
                         >
-                            {getServiceIcon(connectedService)}
-                            <span className="text-sm font-medium whitespace-nowrap">{connectedService ? `Connected to ${connectedService}` : 'Connect'}</span>
+                            <div className="flex items-center gap-2">
+                                {getServiceIcon(connectedService)}
+                                <span className="text-sm font-medium whitespace-nowrap">{connectedService ? `Connected to ${connectedService}` : 'Connect'}</span>
+                            </div>
+
+                            {!connectedService && (
+                                <div className="flex items-center -space-x-2 mr-1">
+                                    {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
+                                        <div key={i} className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center border border-white/10 relative z-[1] transition-transform group-hover:scale-110" style={{ zIndex: 10 - i }}>
+                                            <Icon size={12} className="text-gray-400" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </button>
                         <div className="w-[1px] h-6 bg-white/10" />
                         <div className="flex items-center gap-1">
