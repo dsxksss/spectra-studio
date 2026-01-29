@@ -12,7 +12,14 @@ import {
     Save,
     RotateCcw,
     AlertTriangle,
-    Key
+    Key,
+    Trash2,
+    Plus,
+    Terminal,
+    Hash as HashIcon,
+    List as ListIcon,
+    Activity,
+    Clock
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
@@ -94,9 +101,27 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
     // Saving State
     const [isSaving, setIsSaving] = useState(false);
 
+    // New Rows (not yet in Redis)
+    const [newRows, setNewRows] = useState<any[]>([]);
+
     // Column Resizing
     const [colWidths, setColWidths] = useState<Record<string, number>>({});
     const resizingRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
+
+    const [isCreatingKey, setIsCreatingKey] = useState(false);
+    const [newKeyData, setNewKeyData] = useState({ name: '', type: 'string', value: '' });
+
+    const [isRenamingKey, setIsRenamingKey] = useState<string | null>(null);
+    const [renamedKeyName, setRenamedKeyName] = useState("");
+
+    // Console
+    const [activeView, setActiveView] = useState<'browser' | 'console'>('browser');
+    const [consoleQuery, setConsoleQuery] = useState('');
+    const [consoleResults, setConsoleResults] = useState<{ cmd: string; res: string; isError?: boolean }[]>([]);
+    const [isExecuting, setIsExecuting] = useState(false);
+
+    // TTL
+    const [selectedKeyTTL, setSelectedKeyTTL] = useState<number | null>(null);
 
     // Toast
     const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
@@ -220,8 +245,57 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
         } else {
             setKeyValue("");
             setParsedData([]);
+            setNewRows([]);
+            setSelectedKeyTTL(null);
         }
     }, [selectedKey]);
+
+    const fetchTTL = async (key: string) => {
+        try {
+            const ttl = await invoke<number>('redis_get_ttl', { key });
+            setSelectedKeyTTL(ttl);
+        } catch (err) {
+            console.error("Failed to fetch TTL", err);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedKey) {
+            fetchTTL(selectedKey);
+        }
+    }, [selectedKey]);
+
+    const handleExecuteCommand = async () => {
+        if (!consoleQuery.trim()) return;
+        setIsExecuting(true);
+        try {
+            const result = await invoke<string>('redis_execute_raw', { command: consoleQuery });
+            setConsoleResults(prev => [{ cmd: consoleQuery, res: result }, ...prev]);
+            setConsoleQuery('');
+            // If it's a mutation, maybe refresh keys? 
+            // For now just keep it as a scratchpad.
+        } catch (err: any) {
+            setConsoleResults(prev => [{ cmd: consoleQuery, res: err, isError: true }, ...prev]);
+        } finally {
+            setIsExecuting(false);
+        }
+    };
+
+    const handleAddRow = () => {
+        const initialRow = columns.reduce((acc, col) => ({ ...acc, [col]: "" }), {});
+        setNewRows(prev => [...prev, initialRow]);
+        setMode('edit');
+    };
+
+    const handleNewRowChange = (index: number, col: string, val: string) => {
+        const updated = [...newRows];
+        updated[index] = { ...updated[index], [col]: val };
+        setNewRows(updated);
+    };
+
+    const removeNewRow = (index: number) => {
+        setNewRows(newRows.filter((_, i) => i !== index));
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -264,6 +338,138 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
         });
     };
 
+    const handleDeleteKey = async (key: string) => {
+        setConfirmState({
+            isOpen: true,
+            title: "Delete Key",
+            message: `Are you sure you want to delete the key "${key}"? This will permanently remove all data associated with it.`,
+            isDestructive: true,
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    await invoke('redis_del_key', { key });
+                    showToast(`Key "${key}" deleted`, 'success');
+                    if (selectedKey === key) {
+                        setSelectedKey(null);
+                    }
+                    fetchKeys();
+                } catch (err: any) {
+                    showToast(err, 'error');
+                } finally {
+                    closeConfirm();
+                }
+            }
+        });
+    };
+
+    const handleCreateKey = async () => {
+        if (!newKeyData.name) {
+            showToast("Key name is required", 'error');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            let val = newKeyData.value;
+            // Provide sensible defaults based on type if value is empty
+            if (!val) {
+                if (newKeyData.type === 'hash') {
+                    val = JSON.stringify({ "field": "value" });
+                } else if (newKeyData.type === 'list' || newKeyData.type === 'set' || newKeyData.type === 'zset') {
+                    val = JSON.stringify(["item1"]);
+                } else {
+                    val = "";
+                }
+            }
+
+            await invoke('redis_set_value', { key: newKeyData.name, value: val });
+            showToast(`Key "${newKeyData.name}" created`, 'success');
+            setIsCreatingKey(false);
+            setNewKeyData({ name: '', type: 'string', value: '' });
+            fetchKeys();
+            setSelectedKey(newKeyData.name);
+            setActiveView('browser');
+        } catch (err: any) {
+            showToast(err, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRenameKey = async (oldKey: string) => {
+        if (!renamedKeyName.trim() || renamedKeyName === oldKey) {
+            setIsRenamingKey(null);
+            return;
+        }
+        const newKey = renamedKeyName;
+        setIsLoading(true);
+        try {
+            await invoke('redis_rename_key', { oldKey, newKey });
+            showToast(`Key renamed to ${newKey}`, 'success');
+            // Fetch keys first, then set the new selected key
+            const res = await invoke<string[]>('redis_get_keys', { pattern: '*' });
+            setKeys(res.sort());
+            if (selectedKey === oldKey) {
+                setSelectedKey(newKey);
+            }
+        } catch (err: any) {
+            showToast(err, 'error');
+        } finally {
+            setIsRenamingKey(null);
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteRow = (rowIdx: number) => {
+        setConfirmState({
+            isOpen: true,
+            title: "Delete Row",
+            message: `Are you sure you want to delete this specific row? This change will be applied to the Redis value immediately.`,
+            isDestructive: true,
+            confirmText: "Delete",
+            onConfirm: async () => {
+                closeConfirm();
+                const newData = parsedData.filter((_, i) => i !== rowIdx);
+                await performDataSave(newData);
+            }
+        });
+    };
+
+    const performDataSave = async (data: any[]) => {
+        setIsSaving(true);
+        try {
+            let valueToSave = "";
+            const isKeyValueTable = data.length > 0 && 'Key' in data[0] && 'Value' in data[0] && Object.keys(data[0]).length === 2;
+
+            if (isKeyValueTable) {
+                const obj: Record<string, any> = {};
+                data.forEach((row: any) => {
+                    obj[row.Key] = row.Value;
+                });
+                valueToSave = JSON.stringify(obj);
+            } else if (data.length === 1 && 'Value' in data[0] && Object.keys(data[0]).length === 1) {
+                valueToSave = data[0].Value;
+            } else if (data.length === 0) {
+                // If it's a key-value table, save empty object. Otherwise empty array.
+                const wasKV = parsedData.length > 0 && 'Key' in parsedData[0];
+                valueToSave = wasKV ? "{}" : "[]";
+            } else {
+                valueToSave = JSON.stringify(data);
+            }
+
+            await invoke('redis_set_value', { key: selectedKey, value: valueToSave });
+            showToast("Value updated successfully", 'success');
+            setParsedData(data);
+            setKeyValue(valueToSave);
+            setPendingChanges({}); // Clear changes as structure changed
+            setEditHistory([]);
+        } catch (err: any) {
+            console.error("Save failed", err);
+            showToast("Save failed: " + err, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const requestSave = () => {
         const updates: any[] = [];
         Object.entries(pendingChanges).forEach(([rowIdx, cols]) => {
@@ -278,9 +484,11 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
 
         if (updates.length === 0) return;
 
+        if (updates.length === 0 && newRows.length === 0) return;
+
         const message = (
             <div>
-                <p className="mb-2">Update <span className="text-white font-bold">{updates.length}</span> value(s) for key <span className="text-blue-400">{selectedKey}</span>?</p>
+                <p className="mb-2">Save <span className="text-white font-bold">{updates.length + newRows.length}</span> change(s) for key <span className="text-blue-400">{selectedKey}</span>?</p>
                 <p className="text-xs text-gray-500">This will overwrite the current value in Redis.</p>
             </div>
         );
@@ -309,33 +517,37 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                 }
             });
 
-            // Convert back to format Redis expects
-            // Check original keyValue to guess format? 
-            // Or infer from parsedData structure.
-            let valueToSave = "";
+            // Append new rows
+            const finalData = [...newData, ...newRows];
 
-            // If it was Key/Value table (from Object)
-            const isKeyValueTable = parsedData.length > 0 && 'Key' in parsedData[0] && 'Value' in parsedData[0] && Object.keys(parsedData[0]).length === 2;
-
-            if (isKeyValueTable) {
-                const obj: Record<string, any> = {};
-                newData.forEach((row: any) => {
-                    obj[row.Key] = row.Value;
-                });
-                valueToSave = JSON.stringify(obj);
-            } else if (parsedData.length === 1 && 'Value' in parsedData[0] && Object.keys(parsedData[0]).length === 1) {
-                // Simple string wrapped in object
-                valueToSave = newData[0].Value;
+            if (finalData.length === 0) {
+                // If it was Key/Value table, save empty object. Otherwise empty array.
+                const wasKV = parsedData.length > 0 && 'Key' in parsedData[0];
+                await invoke('redis_set_value', { key: selectedKey, value: wasKV ? "{}" : "[]" });
+                setParsedData([]);
             } else {
-                // Array logic
-                valueToSave = JSON.stringify(newData);
+                let valueToSave = "";
+                const isKeyValueTable = finalData.length > 0 && 'Key' in finalData[0] && 'Value' in finalData[0] && Object.keys(finalData[0]).length === 2;
+
+                if (isKeyValueTable) {
+                    const obj: Record<string, any> = {};
+                    finalData.forEach((row: any) => {
+                        obj[row.Key] = row.Value;
+                    });
+                    valueToSave = JSON.stringify(obj);
+                } else if (finalData.length === 1 && 'Value' in finalData[0] && Object.keys(finalData[0]).length === 1) {
+                    valueToSave = finalData[0].Value;
+                } else {
+                    valueToSave = JSON.stringify(finalData);
+                }
+
+                await invoke('redis_set_value', { key: selectedKey, value: valueToSave });
+                setParsedData(finalData);
+                setKeyValue(valueToSave);
             }
 
-            await invoke('redis_set_value', { key: selectedKey, value: valueToSave });
-
             showToast("Saved successfully", 'success');
-            setParsedData(newData); // Optimistic-ish (backend matches)
-            setKeyValue(valueToSave);
+            setNewRows([]);
             setPendingChanges({});
             setEditHistory([]);
         } catch (err: any) {
@@ -389,7 +601,15 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                 <div className="flex items-center gap-2 mb-3 px-1 text-xs text-gray-500 justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <TableIcon size={12} />
-                        <span>{parsedData.length} items {parsedData.length === 1 ? 'entry' : 'entries'} in this key</span>
+                        <span>{parsedData.length + newRows.length} items {(parsedData.length + newRows.length) === 1 ? 'entry' : 'entries'} in this key</span>
+                        {mode === 'edit' && (
+                            <button
+                                onClick={handleAddRow}
+                                className="ml-4 px-2 py-0.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded border border-blue-500/30 flex items-center gap-1 transition-colors"
+                            >
+                                <Plus size={10} /> Add Item
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -419,13 +639,94 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
+                            {newRows.map((row, i) => (
+                                <tr key={`new-${i}`} className="bg-green-500/5 border-b border-green-500/10 group transition-colors">
+                                    <td className="px-4 py-2 font-mono text-xs text-green-500/50 text-center border-r border-green-500/10 relative">
+                                        <span className="group-hover:hidden text-[10px] font-bold">NEW</span>
+                                        <button
+                                            onClick={() => removeNewRow(i)}
+                                            className="hidden group-hover:flex items-center justify-center absolute inset-0 bg-red-500 text-white transition-colors"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </td>
+                                    {columns.map(col => {
+                                        const width = colWidths[col] || 150;
+                                        return (
+                                            <td key={col} className="p-0 border-r border-green-500/10 last:border-0" style={{ width }}>
+                                                <input
+                                                    autoFocus={i === newRows.length - 1 && col === columns[0]}
+                                                    type="text"
+                                                    value={row[col] || ""}
+                                                    onChange={(e) => handleNewRowChange(i, col, e.target.value)}
+                                                    placeholder={`Enter ${col}...`}
+                                                    className="w-full h-full px-4 py-2 bg-transparent outline-none text-sm text-green-200 focus:bg-white/5 transition-colors placeholder:text-green-900/50"
+                                                />
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                            {parsedData.length === 0 && newRows.length === 0 && (
+                                <tr>
+                                    <td colSpan={columns.length + 1} className="px-4 py-20 text-center text-gray-600 italic">
+                                        <div className="flex flex-col items-center gap-4 opacity-70">
+                                            <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 text-blue-500">
+                                                <Plus size={32} />
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-300 font-medium text-lg not-italic">Key is Empty</p>
+                                                <p className="text-sm not-italic text-gray-500">Choose how you want to add data to <span className="text-blue-400 font-mono">{selectedKey}</span></p>
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setNewRows([{ Value: "" }]);
+                                                        setMode('edit');
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
+                                                >
+                                                    Add String/Value
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setNewRows([{ Key: "field1", Value: "value1" }]);
+                                                        setMode('edit');
+                                                    }}
+                                                    className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
+                                                >
+                                                    Add Hash (Key/Value)
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setNewRows([{ "Item": "item1" }]);
+                                                        setMode('edit');
+                                                    }}
+                                                    className="px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
+                                                >
+                                                    Add List Item
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
                             {parsedData.map((row, rowIdx) => {
                                 const rowChanges = pendingChanges[rowIdx] || {};
 
                                 return (
                                     <tr key={rowIdx} className={`border-b border-white/5 transition-colors ${mode === 'edit' ? 'hover:bg-amber-500/5' : 'hover:bg-white/5'}`}>
-                                        <td className="px-4 py-2 font-mono text-xs opacity-50 text-center border-r border-white/5">
-                                            {rowIdx + 1}
+                                        <td className="px-4 py-2 font-mono text-xs opacity-50 text-center border-r border-white/5 relative group">
+                                            <span className={mode === 'edit' ? 'group-hover:hidden' : ''}>{rowIdx + 1}</span>
+                                            {mode === 'edit' && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteRow(rowIdx); }}
+                                                    className="hidden group-hover:flex items-center justify-center absolute inset-0 bg-red-500 text-white transition-colors"
+                                                    title="Delete row"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            )}
                                         </td>
                                         {columns.map((col) => {
                                             const width = colWidths[col] || 150;
@@ -471,6 +772,75 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
         );
     };
 
+    const renderConsole = () => {
+        return (
+            <div className="flex flex-col h-full overflow-hidden p-6 gap-6">
+                {/* Console Input */}
+                <div className="bg-[#18181b] border border-white/10 rounded-2xl p-6 shadow-2xl relative group">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 flex items-center justify-center">
+                            <Terminal size={16} />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-200">Redis CLI</h3>
+                        <div className="ml-auto flex items-center gap-2">
+                            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Raw Commands</span>
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <textarea
+                            value={consoleQuery}
+                            onChange={(e) => setConsoleQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                    handleExecuteCommand();
+                                }
+                            }}
+                            placeholder="Enter Redis command (e.g. SET user:1 name 'Admin')... Use Ctrl+Enter to run."
+                            className="w-full h-32 bg-[#121214] border border-white/5 rounded-xl px-5 py-4 text-sm text-gray-200 font-mono focus:outline-none focus:border-red-500/30 transition-all placeholder:text-gray-700 shadow-inner resize-none"
+                        />
+                        <button
+                            onClick={handleExecuteCommand}
+                            disabled={isExecuting || !consoleQuery.trim()}
+                            className="absolute bottom-4 right-4 bg-red-500 hover:bg-red-600 disabled:bg-red-500/30 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-xs font-bold shadow-lg shadow-red-500/20 transition-all flex items-center gap-2"
+                        >
+                            {isExecuting ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                            Execute
+                        </button>
+                    </div>
+                </div>
+
+                {/* Console Output */}
+                <div className="flex-1 flex flex-col min-h-0 bg-[#0c0c0e]/50 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-sm shadow-inner">
+                    <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-gray-500 bg-[#18181b]/50">
+                        <span>Execution History</span>
+                        <button onClick={() => setConsoleResults([])} className="hover:text-red-400 transition-colors">Clear</button>
+                    </div>
+                    <div className="flex-1 overflow-auto p-4 space-y-3 custom-scrollbar">
+                        {consoleResults.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-700 italic gap-2 opacity-50">
+                                <Activity size={24} />
+                                <span className="text-xs">No commands executed yet</span>
+                            </div>
+                        ) : (
+                            consoleResults.map((result, i) => (
+                                <div key={i} className="animate-in slide-in-from-left-2 duration-200 border border-white/5 bg-[#121214]/50 rounded-xl overflow-hidden shadow-sm">
+                                    <div className="px-4 py-2 bg-white/5 flex items-center gap-2 font-mono text-[11px] text-gray-400 border-b border-white/5">
+                                        <ChevronLeft size={10} className="text-red-500" />
+                                        <span className="text-red-400">{result.cmd}</span>
+                                    </div>
+                                    <div className={`px-4 py-3 font-mono text-xs whitespace-pre-wrap leading-relaxed ${result.isError ? 'text-red-400 bg-red-500/5' : 'text-green-400 bg-green-500/5'}`}>
+                                        {result.res}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="flex w-full h-full bg-transparent text-gray-300 font-sans overflow-hidden selection:bg-blue-500/30">
             {/* Sidebar (Keys) */}
@@ -481,13 +851,20 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                             <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 flex items-center justify-center">
                                 <RedisIcon size={18} />
                             </div>
-                            <div className="flex flex-col min-w-0 max-w-[160px]">
+                            <div className="flex flex-col min-w-0 max-w-[120px]">
                                 <span className="font-bold text-white text-sm truncate" title={connectionName}>{connectionName || 'Redis Manager'}</span>
                                 <span className="text-[10px] text-red-400/80 font-mono">Redis</span>
                             </div>
                         </div>
+                        <button
+                            onClick={() => setIsCreatingKey(true)}
+                            className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/20"
+                            title="New Key"
+                        >
+                            <Plus size={16} />
+                        </button>
                     </div>
-                    <div className="relative group">
+                    <div className="relative group mb-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={14} />
                         <input
                             type="text"
@@ -497,6 +874,21 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                             onKeyDown={handleKeyDown}
                             className="w-full bg-[#18181b] border border-white/5 rounded-lg py-1.5 pl-9 pr-3 text-xs text-gray-300 focus:outline-none focus:border-blue-500/30 focus:bg-[#1c1c1f] transition-all placeholder:text-gray-600 shadow-sm"
                         />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                        <button
+                            onClick={() => { setActiveView('browser'); setSelectedKey(keys[0] || null); }}
+                            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${activeView === 'browser' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-white/5 text-gray-400 hover:text-gray-200 hover:border-white/10'}`}
+                        >
+                            <Activity size={12} /> Browser
+                        </button>
+                        <button
+                            onClick={() => setActiveView('console')}
+                            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${activeView === 'console' ? 'bg-red-500/10 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-white/5 border-white/5 text-gray-400 hover:text-gray-200 hover:border-white/10'}`}
+                        >
+                            <Terminal size={12} /> Console
+                        </button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -508,10 +900,19 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                 <div
                                     key={key}
                                     onClick={() => setSelectedKey(key)}
-                                    className={`w-full text-left px-3 py-2 rounded-md transition-all text-xs font-medium cursor-pointer truncate flex items-center gap-2 ${selectedKey === key ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'}`}
+                                    className={`group w-full text-left px-3 py-2 rounded-md transition-all text-xs font-medium cursor-pointer truncate flex items-center justify-between gap-2 ${selectedKey === key ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'}`}
                                 >
-                                    <Key size={12} className={selectedKey === key ? 'text-blue-500' : 'text-gray-600'} />
-                                    {key}
+                                    <div className="flex items-center gap-2 truncate flex-1">
+                                        <Key size={12} className={selectedKey === key ? 'text-blue-500' : 'text-gray-600'} />
+                                        {key}
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteKey(key); }}
+                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                        title="Delete Key"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
                                 </div>
                             ))
                         )}
@@ -534,27 +935,47 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
             {/* Main Content */}
             <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden backdrop-blur-md">
                 {/* Header */}
-                <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#0c0c0e]/30 z-20 cursor-move" onPointerDown={onDragStart}>
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => { onClose(); onClose(); }} className="md:hidden p-2 -ml-2 text-gray-400">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                                <RedisIcon size={18} className="text-blue-400" />
+                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
+                    <div className="flex items-center gap-4 overflow-hidden">
+                        {activeView === 'browser' && selectedKey ? (
+                            <div className="flex flex-col group">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Key</span>
+                                {isRenamingKey === selectedKey ? (
+                                    <input
+                                        autoFocus
+                                        value={renamedKeyName}
+                                        onChange={(e) => setRenamedKeyName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleRenameKey(selectedKey);
+                                            if (e.key === 'Escape') setIsRenamingKey(null);
+                                        }}
+                                        onBlur={() => handleRenameKey(selectedKey)}
+                                        className="bg-[#18181b] border border-blue-500/50 rounded px-2 py-0.5 text-white font-medium text-lg outline-none focus:ring-2 focus:ring-blue-500/20 w-64"
+                                    />
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-white font-medium truncate text-lg">{selectedKey}</span>
+                                        <button
+                                            onClick={() => {
+                                                setIsRenamingKey(selectedKey);
+                                                setRenamedKeyName(selectedKey);
+                                            }}
+                                            className="p-1 hover:bg-white/5 rounded text-gray-500 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+                                            title="Rename Key"
+                                        >
+                                            <Pencil size={12} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <h2 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                                    Redis
-                                    {selectedKey && (
-                                        <>
-                                            <span className="text-gray-600">/</span>
-                                            <span className="text-blue-400 font-mono">{selectedKey}</span>
-                                        </>
-                                    )}
-                                </h2>
+                        ) : activeView === 'console' ? (
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Interactive</span>
+                                <span className="text-white font-medium truncate text-lg">Redis Console</span>
                             </div>
-                        </div>
+                        ) : (
+                            <span className="text-gray-500 text-sm">Select a key to view data</span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -610,15 +1031,24 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                     </div>
                 </div>
 
-                {renderTable()}
+                {activeView === 'browser' ? renderTable() : renderConsole()}
 
                 {/* Footer (Status) */}
                 <div className="h-9 border-t border-white/5 bg-[#0c0c0e]/30 flex items-center justify-between px-4 text-[10px] text-gray-500 font-mono cursor-default select-none z-20">
                     <div className="flex items-center gap-4">
                         {selectedKey && (
-                            <span>Rows: <span className="text-gray-300">{parsedData.length}</span></span>
+                            <>
+                                <span>Rows: <span className="text-gray-300">{parsedData.length}</span></span>
+                                {selectedKeyTTL !== null && (
+                                    <span className="flex items-center gap-1.5">
+                                        <Clock size={10} className="text-blue-500/70" />
+                                        TTL: <span className={selectedKeyTTL === -1 ? 'text-gray-300' : 'text-amber-400'}>
+                                            {selectedKeyTTL === -1 ? '∞ (Persistent)' : `${selectedKeyTTL}s`}
+                                        </span>
+                                    </span>
+                                )}
+                            </>
                         )}
-                        {/* Pagination placeholder if needed */}
                     </div>
                 </div>
 
@@ -637,6 +1067,94 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                     isVisible={toast.isVisible}
                     onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
                 />
+
+                {/* New Key Modal */}
+                {isCreatingKey && (
+                    <div className="absolute inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+                        <div className="bg-[#1c1c1f] border border-white/10 rounded-2xl shadow-2xl p-8 max-w-md w-full animate-in zoom-in-95 duration-300">
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center shadow-inner">
+                                    <Plus size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white tracking-tight">Create New Key</h3>
+                                    <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mt-0.5">Redis Database</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Key Name</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newKeyData.name}
+                                        onChange={e => setNewKeyData({ ...newKeyData, name: e.target.value })}
+                                        placeholder="e.g. user:100:profile"
+                                        className="w-full bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-gray-600 shadow-inner"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Key Type</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {(['string', 'hash', 'list', 'set'] as const).map(type => (
+                                            <button
+                                                key={type}
+                                                onClick={() => setNewKeyData({ ...newKeyData, type })}
+                                                className={`py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border flex flex-col items-center gap-1 ${newKeyData.type === type
+                                                    ? 'bg-blue-500 border-blue-500 text-white shadow-lg'
+                                                    : 'bg-[#121214] border-white/5 text-gray-500 hover:text-gray-300'
+                                                    }`}
+                                            >
+                                                {type === 'string' && <Activity size={12} />}
+                                                {type === 'hash' && <HashIcon size={12} />}
+                                                {type === 'list' && <ListIcon size={12} />}
+                                                {type === 'set' && <Key size={12} />}
+                                                {type}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {newKeyData.type === 'string' && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Value</label>
+                                        <textarea
+                                            value={newKeyData.value}
+                                            onChange={e => setNewKeyData({ ...newKeyData, value: e.target.value })}
+                                            placeholder="Enter string value..."
+                                            className="w-full h-24 bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-gray-600 shadow-inner resize-none"
+                                        />
+                                    </div>
+                                )}
+
+                                {newKeyData.type !== 'string' && (
+                                    <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl text-[11px] text-blue-400/80 leading-relaxed italic">
+                                        Key will be initialized with a default {newKeyData.type === 'hash' ? 'field/value' : 'item'} that you can edit later.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 mt-10">
+                                <button
+                                    onClick={() => setIsCreatingKey(false)}
+                                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateKey}
+                                    disabled={!newKeyData.name || isLoading}
+                                    className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest flex items-center gap-2"
+                                >
+                                    {isLoading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                                    Create Key
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

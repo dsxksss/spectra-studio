@@ -469,6 +469,55 @@ async fn redis_del_key(state: State<'_, AppState>, key: String) -> Result<(), St
 }
 
 #[tauri::command]
+async fn redis_get_ttl(state: State<'_, AppState>, key: String) -> Result<i64, String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    let ttl: i64 = redis::cmd("TTL").arg(key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    Ok(ttl)
+}
+
+#[tauri::command]
+async fn redis_execute_raw(state: State<'_, AppState>, command: String) -> Result<String, String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    if parts.is_empty() {
+        return Err("Empty command".to_string());
+    }
+    
+    let mut cmd = redis::cmd(parts[0]);
+    for arg in &parts[1..] {
+        cmd.arg(*arg);
+    }
+    
+    let val: redis::Value = cmd.query_async(&mut con).await.map_err(|e| e.to_string())?;
+    
+    fn format_redis_value(v: redis::Value) -> String {
+        match v {
+            redis::Value::Nil => "(nil)".to_string(),
+            redis::Value::Int(i) => i.to_string(),
+            redis::Value::BulkString(d) => String::from_utf8_lossy(&d).to_string(),
+            redis::Value::Array(v) => {
+                let items: Vec<String> = v.into_iter().map(format_redis_value).collect();
+                format!("[{}]", items.join(", "))
+            },
+            redis::Value::SimpleString(s) => s,
+            redis::Value::Okay => "OK".to_string(),
+            _ => format!("{:?}", v),
+        }
+    }
+    
+    Ok(format_redis_value(val))
+}
+
+#[tauri::command]
 async fn mysql_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let pool = {
         let guard = state.mysql_pool.lock().unwrap();
@@ -732,7 +781,462 @@ async fn postgres_update_cell(state: State<'_, AppState>, table_name: String, pk
     Ok(result.rows_affected())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+async fn sqlite_execute_raw(state: State<'_, AppState>, sql: String) -> Result<String, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let is_query = sql.trim().to_uppercase().starts_with("SELECT") || sql.trim().to_uppercase().starts_with("PRAGMA") || sql.trim().to_uppercase().starts_with("EXPLAIN");
+
+    if is_query {
+        let rows = sqlx::query(&sql).fetch_all(&pool).await.map_err(|e| e.to_string())?;
+        let mut json_rows = Vec::new();
+        for row in rows {
+            let mut map = serde_json::Map::new();
+            for col in row.columns() {
+                let name = col.name();
+                let raw_val = row.try_get_raw(col.ordinal()).unwrap();
+                if raw_val.is_null() {
+                    map.insert(name.to_string(), serde_json::Value::Null);
+                } else {
+                    let type_info = raw_val.type_info();
+                    let type_name = type_info.name();
+                    match type_name {
+                        "INTEGER" => {
+                            let v: i64 = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::Number(v.into()));
+                        },
+                        "REAL" => {
+                            let v: f64 = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::from(v));
+                        },
+                        "BOOLEAN" => {
+                            let v: bool = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::Bool(v));
+                        }
+                        _ => {
+                            let v: String = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::String(v));
+                        }
+                    }
+                }
+            }
+            json_rows.push(serde_json::Value::Object(map));
+        }
+        Ok(serde_json::to_string(&json_rows).unwrap())
+    } else {
+        let result = sqlx::query(&sql).execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(format!("Success: {} rows affected", result.rows_affected()))
+    }
+}
+
+#[tauri::command]
+async fn mysql_execute_raw(state: State<'_, AppState>, sql: String) -> Result<String, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let is_query = sql.trim().to_uppercase().starts_with("SELECT") || sql.trim().to_uppercase().starts_with("SHOW") || sql.trim().to_uppercase().starts_with("DESCRIBE") || sql.trim().to_uppercase().starts_with("EXPLAIN");
+
+    if is_query {
+        let rows = sqlx::query(&sql).fetch_all(&pool).await.map_err(|e| e.to_string())?;
+        let mut json_rows = Vec::new();
+        for row in rows {
+            let mut map = serde_json::Map::new();
+            for col in row.columns() {
+                let name = col.name();
+                let raw_val = row.try_get_raw(col.ordinal()).unwrap();
+                if raw_val.is_null() {
+                    map.insert(name.to_string(), serde_json::Value::Null);
+                } else {
+                     let type_info = raw_val.type_info();
+                     let type_name = type_info.name();
+                     match type_name {
+                         "TINYINT" | "SMALLINT" | "INT" | "BIGINT" => {
+                             if let Ok(v) = row.try_get::<i64, _>(col.ordinal()) {
+                                map.insert(name.to_string(), serde_json::Value::Number(v.into()));
+                             } else {
+                                let v: String = row.get(col.ordinal());
+                                map.insert(name.to_string(), serde_json::Value::String(v));
+                             }
+                         },
+                         "FLOAT" | "DOUBLE" | "DECIMAL" => {
+                             if let Ok(v) = row.try_get::<f64, _>(col.ordinal()) {
+                                 map.insert(name.to_string(), serde_json::Value::from(v));
+                             } else {
+                                 let v: String = row.get(col.ordinal());
+                                 map.insert(name.to_string(), serde_json::Value::String(v));
+                             }
+                         },
+                         "BOOLEAN" => {
+                             if let Ok(v) = row.try_get::<bool, _>(col.ordinal()) {
+                                 map.insert(name.to_string(), serde_json::Value::Bool(v));
+                             } else {
+                                 let v: String = row.get(col.ordinal());
+                                 map.insert(name.to_string(), serde_json::Value::String(v));
+                             }
+                         },
+                         _ => {
+                             let v: String = row.get(col.ordinal());
+                             map.insert(name.to_string(), serde_json::Value::String(v));
+                         }
+                     }
+                }
+            }
+            json_rows.push(serde_json::Value::Object(map));
+        }
+        Ok(serde_json::to_string(&json_rows).unwrap())
+    } else {
+        let result = sqlx::query(&sql).execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(format!("Success: {} rows affected", result.rows_affected()))
+    }
+}
+
+#[tauri::command]
+async fn postgres_execute_raw(state: State<'_, AppState>, sql: String) -> Result<String, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let is_query = sql.trim().to_uppercase().starts_with("SELECT") || sql.trim().to_uppercase().starts_with("SHOW") || sql.trim().to_uppercase().starts_with("EXPLAIN");
+
+    if is_query {
+        // For Postgres, row_to_json is often easier but let's do manual for consistency and because we don't have a wrapper query here
+        let rows = sqlx::query(&sql).fetch_all(&pool).await.map_err(|e| e.to_string())?;
+        let mut json_rows = Vec::new();
+        for row in rows {
+            let mut map = serde_json::Map::new();
+            for col in row.columns() {
+                let name = col.name();
+                let raw_val = row.try_get_raw(col.ordinal()).unwrap();
+                if raw_val.is_null() {
+                    map.insert(name.to_string(), serde_json::Value::Null);
+                } else {
+                    let type_info = raw_val.type_info();
+                    let type_name = type_info.name();
+                    match type_name {
+                        "INT2" | "INT4" | "INT8" => {
+                            if let Ok(v) = row.try_get::<i64, _>(col.ordinal()) {
+                                map.insert(name.to_string(), serde_json::Value::Number(v.into()));
+                            } else {
+                                let v: String = row.get(col.ordinal());
+                                map.insert(name.to_string(), serde_json::Value::String(v));
+                            }
+                        },
+                        "FLOAT4" | "FLOAT8" | "NUMERIC" => {
+                            if let Ok(v) = row.try_get::<f64, _>(col.ordinal()) {
+                                map.insert(name.to_string(), serde_json::Value::from(v));
+                            } else {
+                                let v: String = row.get(col.ordinal());
+                                map.insert(name.to_string(), serde_json::Value::String(v));
+                            }
+                        },
+                        "BOOL" => {
+                            if let Ok(v) = row.try_get::<bool, _>(col.ordinal()) {
+                                map.insert(name.to_string(), serde_json::Value::Bool(v));
+                            } else {
+                                let v: String = row.get(col.ordinal());
+                                map.insert(name.to_string(), serde_json::Value::String(v));
+                            }
+                        },
+                        _ => {
+                            let v: String = row.get(col.ordinal());
+                            map.insert(name.to_string(), serde_json::Value::String(v));
+                        }
+                    }
+                }
+            }
+            json_rows.push(serde_json::Value::Object(map));
+        }
+        Ok(serde_json::to_string(&json_rows).unwrap())
+    } else {
+        let result = sqlx::query(&sql).execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(format!("Success: {} rows affected", result.rows_affected()))
+    }
+}
+
+#[tauri::command]
+async fn mysql_get_columns(state: State<'_, AppState>, table_name: String) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
+    
+    let rows: Vec<(String,)> = sqlx::query_as(q)
+        .bind(table_name)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_columns(state: State<'_, AppState>, table_name: String) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = "SELECT column_name::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position";
+    
+    let rows: Vec<(String,)> = sqlx::query_as(q)
+        .bind(table_name)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn sqlite_get_columns(state: State<'_, AppState>, table_name: String) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let q = format!("PRAGMA table_info(\"{}\")", table_name);
+    
+    let rows: Vec<(i32, String, String, i32, Option<String>, i32)> = sqlx::query_as(&q)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(_, name, _, _, _, _)| name).collect())
+}
+
+#[tauri::command]
+async fn mysql_insert_row(state: State<'_, AppState>, table_name: String, data: serde_json::Map<String, serde_json::Value>) -> Result<u64, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let cols: Vec<String> = data.keys().map(|k| format!("`{}`", k)).collect();
+    let placeholders: Vec<String> = vec!["?".to_string(); data.len()];
+    
+    let q = format!("INSERT INTO `{}` ({}) VALUES ({})", table_name, cols.join(", "), placeholders.join(", "));
+    
+    let mut query = sqlx::query(&q);
+    for val in data.values() {
+        if val.is_null() {
+            query = query.bind(Option::<String>::None);
+        } else {
+            let s = val.as_str().map(|s| s.to_string()).unwrap_or_else(|| val.to_string());
+            query = query.bind(s);
+        }
+    }
+
+    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn postgres_insert_row(state: State<'_, AppState>, table_name: String, data: serde_json::Map<String, serde_json::Value>) -> Result<u64, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // 1. Fetch types for all columns being inserted to ensure correct casting
+    let type_q = "SELECT column_name::text, udt_name::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1";
+    let rows: Vec<(String, String)> = sqlx::query_as(type_q)
+        .bind(&table_name)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let type_map: std::collections::HashMap<String, String> = rows.into_iter().collect();
+
+    let mut cols_names = Vec::new();
+    let mut placeholders = Vec::new();
+    let mut bind_values = Vec::new();
+
+    for (i, (k, v)) in data.iter().enumerate() {
+        cols_names.push(format!("\"{}\"", k));
+        
+        // Get the column type for casting
+        let col_type = type_map.get(k).map(|s| s.as_str()).unwrap_or("text");
+        placeholders.push(format!("${}::{}", i + 1, col_type));
+        
+        // Convert value to string for binding (Postgres will cast via the placeholder)
+        let val_str = match v {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Null => "".to_string(), // Handle null as empty string if bound to a cast? 
+                                                      // Actually, if it's null, we might want to bind None.
+            _ => v.to_string()
+        };
+        bind_values.push((val_str, v.is_null()));
+    }
+    
+    let q = format!("INSERT INTO public.\"{}\" ({}) VALUES ({})", table_name, cols_names.join(", "), placeholders.join(", "));
+    
+    let mut query = sqlx::query(&q);
+    for (v, is_null) in bind_values {
+        if is_null {
+            query = query.bind(Option::<String>::None);
+        } else {
+            query = query.bind(v);
+        }
+    }
+
+    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn sqlite_get_count(state: State<'_, AppState>, table_name: String) -> Result<i64, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("SELECT COUNT(*) FROM \"{}\"", table_name);
+    let count: (i64,) = sqlx::query_as(&q).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+    Ok(count.0)
+}
+
+#[tauri::command]
+async fn sqlite_insert_row(state: State<'_, AppState>, table_name: String, data: serde_json::Map<String, serde_json::Value>) -> Result<u64, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let cols: Vec<String> = data.keys().map(|k| format!("\"{}\"", k)).collect();
+    let placeholders: Vec<String> = vec!["?".to_string(); data.len()];
+    
+    let q = format!("INSERT INTO \"{}\" ({}) VALUES ({})", table_name, cols.join(", "), placeholders.join(", "));
+    
+    let mut query = sqlx::query(&q);
+    for val in data.values() {
+        if val.is_null() {
+            query = query.bind(Option::<String>::None);
+        } else {
+            let s = val.as_str().map(|s| s.to_string()).unwrap_or_else(|| val.to_string());
+            query = query.bind(s);
+        }
+    }
+
+    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn mysql_delete_row(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DELETE FROM `{}` WHERE `{}` = ?", table_name, pk_col);
+    let result = sqlx::query(&q).bind(pk_val).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn mysql_drop_table(state: State<'_, AppState>, table_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DROP TABLE `{}`", table_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn postgres_delete_row(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DELETE FROM public.\"{}\" WHERE \"{}\"::text = $1", table_name, pk_col);
+    let result = sqlx::query(&q).bind(pk_val).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn postgres_drop_table(state: State<'_, AppState>, table_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DROP TABLE public.\"{}\"", table_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn sqlite_delete_row(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DELETE FROM \"{}\" WHERE \"{}\" = ?", table_name, pk_col);
+    let result = sqlx::query(&q).bind(pk_val).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn sqlite_drop_table(state: State<'_, AppState>, table_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("DROP TABLE \"{}\"", table_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+#[tauri::command]
+async fn redis_rename_key(state: State<'_, AppState>, old_key: String, new_key: String) -> Result<(), String> {
+    let client = {
+        let guard = state.redis_client.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let mut con = client.get_multiplexed_async_connection().await.map_err(|e| e.to_string())?;
+    let _: () = redis::cmd("RENAME").arg(old_key).arg(new_key).query_async(&mut con).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn mysql_rename_table(state: State<'_, AppState>, old_name: String, new_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("RENAME TABLE `{}` TO `{}`", old_name, new_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn postgres_rename_table(state: State<'_, AppState>, old_name: String, new_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("ALTER TABLE public.\"{}\" RENAME TO \"{}\"", old_name, new_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn sqlite_rename_table(state: State<'_, AppState>, old_name: String, new_name: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    let q = format!("ALTER TABLE \"{}\" RENAME TO \"{}\"", old_name, new_name);
+    sqlx::query(&q).execute(&pool).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_opener::init())
@@ -748,6 +1252,12 @@ pub fn run() {
         update_click_region,
         get_screen_work_area,
         connect_redis, 
+        redis_get_keys,
+        redis_get_value,
+        redis_set_value,
+        redis_del_key,
+        redis_get_ttl,
+        redis_execute_raw,
         connect_mysql,
         connect_postgres,
         connect_mongodb,
@@ -764,12 +1274,28 @@ pub fn run() {
         postgres_update_cell,
         sqlite_get_tables,
         sqlite_get_rows,
+        sqlite_get_count,
         sqlite_update_cell,
         sqlite_get_primary_key,
-        redis_get_keys, 
-        redis_get_value, 
-        redis_set_value,
-        redis_del_key
+        sqlite_execute_raw,
+        mysql_execute_raw,
+        postgres_execute_raw,
+        mysql_get_columns,
+        postgres_get_columns,
+        sqlite_get_columns,
+        mysql_insert_row,
+        postgres_insert_row,
+        sqlite_insert_row,
+        mysql_delete_row,
+        mysql_drop_table,
+        postgres_delete_row,
+        postgres_drop_table,
+        sqlite_delete_row,
+        sqlite_drop_table,
+        redis_rename_key,
+        mysql_rename_table,
+        postgres_rename_table,
+        sqlite_rename_table
     ])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
