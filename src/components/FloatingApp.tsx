@@ -266,7 +266,7 @@ export default function FloatingApp() {
     return (
         <div className={containerFlexClass}>
             <div
-                className="bg-[#18181b] border border-white/10 overflow-hidden shadow-2xl pointer-events-auto"
+                className="bg-[#18181b] overflow-hidden shadow-2xl pointer-events-auto"
                 style={{
                     width: `${currentUiSize.w}px`,
                     height: `${currentUiSize.h}px`,
@@ -279,7 +279,7 @@ export default function FloatingApp() {
             >
                 {/* Persistent Background Layer */}
                 <div
-                    className="absolute inset-0 z-0 transition-opacity pointer-events-none overflow-hidden"
+                    className="absolute py-[1px] inset-0 z-0 transition-opacity pointer-events-none overflow-hidden"
                     style={{
                         opacity: viewMode === 'expanded' ? 1 : 0,
                         borderRadius: `${currentUiSize.r}px`,
