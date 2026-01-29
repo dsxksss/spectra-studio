@@ -98,7 +98,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
     const [editHistory, setEditHistory] = useState<Record<number, Record<string, string>>[]>([]);
 
     // Saving State
-    const [isSaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
 
 
@@ -170,6 +170,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
             let res: string[] = [];
             if (serviceType === 'PostgreSQL') {
                 res = await invoke<string[]>('postgres_get_tables');
+            } else if (serviceType === 'SQLite') {
+                res = await invoke<string[]>('sqlite_get_tables');
             } else {
                 res = [];
             }
@@ -190,6 +192,10 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                 const offset = (p - 1) * pageSize;
                 // Backend expects i64, JS number is fine (tauri converts)
                 const res = await invoke<string[]>('postgres_get_rows', { tableName: table, limit: pageSize, offset });
+                setKeyValue(`[${res.join(',')}]`);
+            } else if (serviceType === 'SQLite') {
+                const offset = (p - 1) * pageSize;
+                const res = await invoke<string[]>('sqlite_get_rows', { tableName: table, limit: pageSize, offset });
                 setKeyValue(`[${res.join(',')}]`);
             } else {
                 setKeyValue("[]");
@@ -218,6 +224,9 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
         try {
             if (serviceType === 'PostgreSQL') {
                 const pk = await invoke<string | null>('postgres_get_primary_key', { tableName: table });
+                setPrimaryKey(pk);
+            } else if (serviceType === 'SQLite') {
+                const pk = await invoke<string | null>('sqlite_get_primary_key', { tableName: table });
                 setPrimaryKey(pk);
             }
         } catch (e) {
@@ -418,9 +427,10 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
     };
 
     const executeBatchUpdate = async (updates: any[]) => {
-        setIsLoading(true);
+        setIsSaving(true);
         try {
-            const results = await Promise.all(updates.map(u => invoke<number>('postgres_update_cell', u)));
+            const command = serviceType === 'SQLite' ? 'sqlite_update_cell' : 'postgres_update_cell';
+            const results = await Promise.all(updates.map(u => invoke<number>(command, u)));
             const totalRowsAffected = results.reduce((sum, current) => sum + current, 0);
 
             if (totalRowsAffected > 0) {
@@ -446,7 +456,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
             console.error("Batch update failed", err);
             showToast("Some updates failed. Check console.", 'error');
         } finally {
-            setIsLoading(false);
+            setIsSaving(false);
         }
     };
 
@@ -645,9 +655,14 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, se
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <span>{keys.length} Tables</span>
-                    <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
-                        <LogOut size={14} /> <span className="font-medium">Disconnect</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
+                            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+                        </button>
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
+                            <LogOut size={14} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -15,7 +15,8 @@ import {
     Play,
     RefreshCw,
     Pencil,
-    Trash2
+    Trash2,
+    FileJson
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
@@ -206,20 +207,29 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setSelectedService(service);
         switch (service) {
             case 'Redis':
+                setHost('127.0.0.1');
                 setPort('6379');
                 setDbName('0');
                 break;
             case 'MySQL':
+                setHost('127.0.0.1');
                 setPort('3306');
                 setDbName('mysql');
                 break;
             case 'PostgreSQL':
+                setHost('127.0.0.1');
                 setPort('5432');
                 setDbName('postgres');
                 break;
             case 'MongoDB':
+                setHost('127.0.0.1');
                 setPort('27017');
                 setDbName('admin');
+                break;
+            case 'SQLite':
+                setPort('0');
+                setDbName('');
+                setHost('data.db');
                 break;
         }
     };
@@ -315,9 +325,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 res = await invoke('connect_mongodb', {
                     host: hostStr,
                     port: portNum,
-                    username: usernameArg || null,
+                    username: usernameArg || null, // Allow empty user for mongo
                     password: passwordArg,
                     timeout_sec: timeoutSec
+                });
+            } else if (service === 'SQLite') {
+                res = await invoke('connect_sqlite', {
+                    path: hostStr
                 });
             }
 
@@ -574,11 +588,11 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         {/* Service Type */}
                         <div className="space-y-4 px-8">
                             <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Service Type</label>
-                            <div className="grid grid-cols-4 gap-4">
-                                {['PostgreSQL', 'MySQL', 'Redis', 'MongoDB'].map((service) => (
+                            <div className="grid grid-cols-3 gap-3">
+                                {['PostgreSQL', 'MySQL', 'Redis', 'MongoDB', 'SQLite'].map((service) => (
                                     <ServiceTypeButton
                                         key={service}
-                                        icon={service === 'Redis' ? Activity : (service === 'MongoDB' ? Globe : Database)}
+                                        icon={service === 'Redis' ? Activity : (service === 'MongoDB' ? Globe : (service === 'SQLite' ? FileJson : Database))}
                                         label={service}
                                         active={selectedService === service}
                                         onClick={() => handleServiceChange(service)}
@@ -604,30 +618,37 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
                             <div className="flex gap-4">
                                 <div className="flex-[3]">
-                                    <InputField label="Host / IP Address" value={host} onChange={(e: any) => setHost(e.target.value)} />
+                                    <InputField
+                                        label={selectedService === 'SQLite' ? "Database Path" : "Host / IP Address"}
+                                        value={host}
+                                        onChange={(e: any) => setHost(e.target.value)}
+                                        placeholder={selectedService === 'SQLite' ? "e.g. /path/to/db.sqlite" : "e.g. 127.0.0.1"}
+                                    />
                                 </div>
-                                <div className="flex flex-col gap-2.5 flex-[1]">
-                                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Port</label>
-                                    <div className="flex items-center h-[46px] bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
-                                        <button
-                                            onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
-                                            className="px-3.5 py-3 hover:text-white text-gray-500 border-r border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
-                                        >
-                                            -
-                                        </button>
-                                        <input
-                                            className="w-full bg-transparent text-center text-gray-200 outline-none font-mono text-sm py-3"
-                                            value={port}
-                                            onChange={(e: any) => setPort(e.target.value)}
-                                        />
-                                        <button
-                                            onClick={() => setPort((prev) => String(parseInt(prev || '0') + 1))}
-                                            className="px-3.5 py-3 hover:text-white text-gray-500 border-l border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
-                                        >
-                                            +
-                                        </button>
+                                {selectedService !== 'SQLite' && (
+                                    <div className="flex flex-col gap-2.5 flex-[1]">
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Port</label>
+                                        <div className="flex items-center h-[46px] bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
+                                            <button
+                                                onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
+                                                className="px-3.5 py-3 hover:text-white text-gray-500 border-r border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                className="w-full bg-transparent text-center text-gray-200 outline-none font-mono text-sm py-3"
+                                                value={port}
+                                                onChange={(e: any) => setPort(e.target.value)}
+                                            />
+                                            <button
+                                                onClick={() => setPort((prev) => String(parseInt(prev || '0') + 1))}
+                                                className="px-3.5 py-3 hover:text-white text-gray-500 border-l border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
                             <div className="flex gap-4">

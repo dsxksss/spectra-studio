@@ -16,14 +16,180 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST, CreateRectRgn, SetWindowRgn}; // Added imports
 
 use std::time::Duration;
-use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, MySqlPool, PgPool};
+use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, sqlite::SqlitePoolOptions, MySqlPool, PgPool, SqlitePool};
+use sqlx::{Column, Row, TypeInfo, ValueRef}; // For manual JSON conversion
 use mongodb::{options::ClientOptions, Client};
 
 struct AppState {
     redis_client: Mutex<Option<redis::Client>>,
     mysql_pool: Mutex<Option<MySqlPool>>,
     pg_pool: Mutex<Option<PgPool>>,
+    sqlite_pool: Mutex<Option<SqlitePool>>,
     mongo_client: Mutex<Option<Client>>,
+}
+
+// ... (existing commands) ...
+
+#[tauri::command]
+async fn connect_sqlite(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    let url = format!("sqlite://{}", path);
+    // Ensure the file exists? sqlite usually creates if not exists + create_if_missing(true)
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    *state.sqlite_pool.lock().unwrap() = Some(pool);
+    Ok("Connected to SQLite".to_string())
+}
+
+#[tauri::command]
+async fn sqlite_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn sqlite_get_rows(state: State<'_, AppState>, table_name: String, limit: i64, offset: i64) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // 1. Fetch PK for stable ordering (convention: look for PK in PRAGMA table_info)
+    // Or just "rowid" if not present? stick to simple for now.
+    // Let's rely on default order or rowid if convenient.
+    // Querying PRAGMA table_info is a bit structured. 
+    // Let's just do simplistic Select. User can request stable sort later if needed.
+    
+    let q = format!("SELECT * FROM \"{}\" LIMIT {} OFFSET {}", table_name, limit, offset);
+    
+    let rows = sqlx::query(&q)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Manual JSON conversion
+    let mut json_rows = Vec::new();
+    for row in rows {
+        let mut map = serde_json::Map::new();
+        for col in row.columns() {
+            let name = col.name();
+            // In SQLite, types are dynamic. We try to read based on storage class.
+            // sqlx::Row::try_get is strongly typed. 
+            // We can check type_info.
+            // Simplified: Try Text, then others? 
+            // Better: use `try_get_raw` and check `type_info`.
+            
+            // To simplify logic, we can try to cast everything to string in SQL or handle basic types here.
+            // Let's attempt to get as String first, then standard types if failure?
+            // Actually, Sqlite values can be cast to String easily.
+            // But we want JSON numbers/bools if possible.
+            
+            // Hacky but robust: just get everything as String for the viewer?
+            // "Viewer" usually expects strings for editing inputs.
+            // Let's stick to ALL STRINGS for consistency with the Postgres implementation (row_to_json does strings for safety often).
+            // Wait, standard `row_to_json` in Postgres preserves types (Sort of).
+            // But our Frontend treats `pendingChanges` as strings.
+            // Let's try to get as String (TEXT) from DB.
+            
+            // `row.try_get::<String, _>(col.ordinal())` might fail if it's an INT.
+            // `row.try_get::<i64, _>(col.ordinal())` ...
+            
+            // Let's use `sqlx::ValueRef`.
+            let raw_val = row.try_get_raw(col.ordinal()).unwrap();
+            if raw_val.is_null() {
+                map.insert(name.to_string(), serde_json::Value::Null);
+            } else {
+                let type_info = raw_val.type_info();
+                let type_name = type_info.name();
+                match type_name {
+                    "INTEGER" => {
+                        let v: i64 = row.get(col.ordinal());
+                        map.insert(name.to_string(), serde_json::Value::Number(v.into()));
+                    },
+                    "REAL" => {
+                        let v: f64 = row.get(col.ordinal());
+                        map.insert(name.to_string(), serde_json::Value::from(v));
+                    },
+                    "BOOLEAN" => {
+                        let v: bool = row.get(col.ordinal());
+                        map.insert(name.to_string(), serde_json::Value::Bool(v));
+                    }
+                    _ => {
+                        let v: String = row.get(col.ordinal());
+                        map.insert(name.to_string(), serde_json::Value::String(v));
+                    }
+                }
+            }
+        }
+        json_rows.push(serde_json::Value::Object(map).to_string());
+    }
+
+    Ok(json_rows)
+}
+
+#[tauri::command]
+async fn sqlite_update_cell(state: State<'_, AppState>, table_name: String, pk_col: String, pk_val: String, col_name: String, new_val: String) -> Result<u64, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // SQLite is dynamic, but we can try to bind as string and let SQLite coerce, 
+    // OR format the query carefully.
+    // Parameter binding `?` works well.
+    // WHERE clause needs to match PK.
+    
+    // Safety: table/col names must be escaped quotes.
+    // `pk_val` is passed as string from frontend. We bind it as string.
+    
+    let q = format!("UPDATE \"{}\" SET \"{}\" = ? WHERE \"{}\" = ?", table_name, col_name, pk_col);
+    
+    let result = sqlx::query(&q)
+        .bind(new_val) // Bind as string, SQLite attempts coercion
+        .bind(pk_val)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(result.rows_affected())
+}
+
+#[tauri::command]
+async fn sqlite_get_primary_key(state: State<'_, AppState>, table_name: String) -> Result<Option<String>, String> {
+    let pool = {
+        let guard = state.sqlite_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+    
+    // PRAGMA table_info(table_name)
+    // returns columns: cid, name, type, notnull, dflt_value, pk
+    let q = format!("PRAGMA table_info(\"{}\")", table_name);
+    let rows = sqlx::query(&q)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let pk: i32 = row.get("pk");
+        if pk > 0 {
+             let name: String = row.get("name");
+             return Ok(Some(name));
+        }
+    }
+    
+    Ok(None)
 }
 
 #[tauri::command]
@@ -444,6 +610,7 @@ pub fn run() {
         redis_client: Mutex::new(None),
         mysql_pool: Mutex::new(None),
         pg_pool: Mutex::new(None),
+        sqlite_pool: Mutex::new(None),
         mongo_client: Mutex::new(None),
     })
     .invoke_handler(tauri::generate_handler![
@@ -454,11 +621,16 @@ pub fn run() {
         connect_mysql,
         connect_postgres,
         connect_mongodb,
+        connect_sqlite,
         postgres_get_tables,
         postgres_get_rows,
         postgres_get_count,
         postgres_get_primary_key,
         postgres_update_cell,
+        sqlite_get_tables,
+        sqlite_get_rows,
+        sqlite_update_cell,
+        sqlite_get_primary_key,
         redis_get_keys, 
         redis_get_value, 
         redis_set_value,

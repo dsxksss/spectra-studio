@@ -1,40 +1,162 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Search,
     Database,
     RefreshCw,
-    Key,
     ChevronRight,
+    ChevronLeft,
     X,
     LogOut,
     Table as TableIcon,
-    FileJson,
     AlertCircle,
-    Plus,
-    Trash2,
-    Save,
+    Eye,
     Pencil,
-    Type
+    Save,
+    RotateCcw,
+    AlertTriangle,
+    Key,
+    Type,
+    Plus,
+    Trash2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { Toast, ToastType } from './Toast';
 
-type EditRow = { field: string; value: string; id: number };
+// Internal Confirm Dialog Component
+const ConfirmDialog = ({
+    isOpen,
+    title,
+    message,
+    onConfirm,
+    onCancel,
+    confirmText = "Confirm",
+    cancelText = "Cancel",
+    isDestructive = false
+}: {
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    onCancel: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+}) => {
+    if (!isOpen) return null;
+    return (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-[#18181b] border border-white/10 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isDestructive ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                        {isDestructive ? <AlertTriangle size={20} /> : <AlertCircle size={20} />}
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">{title}</h3>
+                </div>
+
+                <div className="text-gray-400 text-sm mb-6 whitespace-pre-wrap leading-relaxed">
+                    {message}
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                    <button
+                        onClick={onCancel}
+                        className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium text-white shadow-lg transition-all ${isDestructive
+                            ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20'
+                            : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
+                            }`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function RedisManager({ onClose, onDisconnect, onDragStart }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
-    const [keyValue, setKeyValue] = useState<string>("");
+    const [keyValue, setKeyValue] = useState<string>(""); // Raw string from Redis
+    const [parsedData, setParsedData] = useState<any[]>([]); // Parsed for table
     const [filter, setFilter] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Editing / Creating State
-    const [isCreating, setIsCreating] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [editKeyName, setEditKeyName] = useState("");
-    const [editRows, setEditRows] = useState<EditRow[]>([]);
-    const [editMode, setEditMode] = useState<'structured' | 'raw'>('structured');
-    const [rawEditValue, setRawEditValue] = useState("");
+    // Editing
+    const [mode, setMode] = useState<'view' | 'edit'>('view');
+    // Batch Editing: pendingChanges map rowIndex -> { colName: newValue }
+    const [pendingChanges, setPendingChanges] = useState<Record<number, Record<string, string>>>({});
+    // History
+    const [editHistory, setEditHistory] = useState<Record<number, Record<string, string>>[]>([]);
+
+    // Saving State
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Column Resizing
+    const [colWidths, setColWidths] = useState<Record<string, number>>({});
+    const resizingRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
+
+    // Toast
+    const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
+        message: '',
+        type: 'info',
+        isVisible: false
+    });
+
+    const showToast = (message: string, type: ToastType = 'info') => {
+        setToast({ message, type, isVisible: true });
+    };
+
+    // Confirm Dialog State
+    const [confirmState, setConfirmState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: React.ReactNode;
+        onConfirm: () => void;
+        isDestructive?: boolean;
+        confirmText?: string;
+    } | null>(null);
+
+    const closeConfirm = () => setConfirmState(null);
+
+    // Resize Logic
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!resizingRef.current) return;
+            const { col, startX, startWidth } = resizingRef.current;
+            const diff = e.clientX - startX;
+            const newWidth = Math.max(50, startWidth + diff); // Min width 50px
+            setColWidths(prev => ({ ...prev, [col]: newWidth }));
+        };
+
+        const handleMouseUp = () => {
+            if (resizingRef.current) {
+                resizingRef.current = null;
+                document.body.style.cursor = '';
+            }
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
+
+    const startResize = (e: React.MouseEvent, col: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentWidth = colWidths[col] || 150;
+        resizingRef.current = { col, startX: e.clientX, startWidth: currentWidth };
+        document.body.style.cursor = 'col-resize';
+    };
 
     const fetchKeys = async () => {
         setIsLoading(true);
@@ -44,113 +166,44 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
             setKeys(res.sort());
         } catch (err: any) {
             console.error("Failed to fetch keys", err);
-            setError(typeof err === 'string' ? err : "Failed to fetch keys from Redis.");
+            setError(typeof err === 'string' ? err : "Failed to fetch keys.");
+            showToast("Failed to fetch keys", 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
     const fetchValue = async (key: string) => {
+        setIsLoading(true);
         try {
             const res = await invoke<string>('redis_get_value', { key });
             setKeyValue(res);
-        } catch (err) {
-            console.error("Failed to fetch value", err);
-            setKeyValue("Error fetching value");
-        }
-    };
 
-    // Initialize Creator
-    const startCreating = () => {
-        setIsCreating(true);
-        setIsEditing(false);
-        setSelectedKey(null);
-        setEditKeyName("");
-        setEditRows([{ field: "", value: "", id: Date.now() }]);
-        setEditMode('structured');
-        setRawEditValue("");
-    };
-
-    // Initialize Editor with current data
-    const startEditing = () => {
-        if (!selectedKey) return;
-        setIsCreating(false);
-        setIsEditing(true);
-        setEditKeyName(selectedKey);
-
-        try {
-            const parsed = JSON.parse(keyValue);
-            if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                // Compatible with Table View
-                const rows = Object.entries(parsed).map(([k, v], i) => ({
-                    field: k,
-                    value: String(v),
-                    id: Date.now() + i
-                }));
-                if (rows.length === 0) rows.push({ field: "", value: "", id: Date.now() });
-                setEditRows(rows);
-                setEditMode('structured');
-            } else {
-                // Fallback to Raw
-                setEditMode('raw');
-                setRawEditValue(keyValue);
+            // Try parse as JSON/Table
+            try {
+                const parsed = JSON.parse(res);
+                if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+                    setParsedData(parsed);
+                } else if (typeof parsed === 'object' && parsed !== null) {
+                    // Object -> Array of Key/Value for table
+                    const table = Object.entries(parsed).map(([k, v]) => ({ Key: k, Value: String(v) }));
+                    setParsedData(table);
+                } else {
+                    // Primitive or simple array
+                    setParsedData([{ Value: res }]);
+                }
+            } catch {
+                // Not JSON, simple string
+                setParsedData([{ Value: res }]);
             }
-        } catch {
-            setEditMode('raw');
-            setRawEditValue(keyValue);
-        }
-    };
-
-    const handleSave = async () => {
-        const targetKey = isCreating ? editKeyName : (editKeyName || selectedKey);
-        if (!targetKey) return;
-
-        let valueToSave = "";
-        if (editMode === 'structured') {
-            const obj = editRows.reduce((acc, row) => {
-                if (row.field.trim()) acc[row.field.trim()] = row.value;
-                return acc;
-            }, {} as Record<string, any>);
-            valueToSave = JSON.stringify(obj);
-        } else {
-            valueToSave = rawEditValue;
-        }
-
-        try {
-            // Handle Rename: if editing existing key and name changed, delete old key
-            if (!isCreating && selectedKey && selectedKey !== targetKey) {
-                await invoke('redis_del_key', { key: selectedKey });
-            }
-
-            await invoke('redis_set_value', { key: targetKey, value: valueToSave });
-
-            // Cleanup and Refresh
-            setIsCreating(false);
-            setIsEditing(false);
-            setEditKeyName("");
-
-            await fetchKeys();
-            setSelectedKey(targetKey); // This will trigger fetchValue -> update view
         } catch (err) {
-            alert("Failed to save: " + err);
+            console.error(err);
+            setKeyValue("Error loading data");
+            showToast("Error loading data", 'error');
+            setParsedData([]);
+        } finally {
+            setIsLoading(false);
         }
-    };
-
-    const cancelEdit = () => {
-        setIsCreating(false);
-        setIsEditing(false);
-    };
-
-    const addRow = () => {
-        setEditRows([...editRows, { field: "", value: "", id: Date.now() }]);
-    };
-
-    const removeRow = (id: number) => {
-        setEditRows(editRows.filter(r => r.id !== id));
-    };
-
-    const updateRow = (id: number, field: keyof EditRow, val: string) => {
-        setEditRows(editRows.map(r => r.id === id ? { ...r, [field]: val } : r));
     };
 
     useEffect(() => {
@@ -159,11 +212,13 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
 
     useEffect(() => {
         if (selectedKey) {
-            setIsCreating(false);
-            setIsEditing(false);
             fetchValue(selectedKey);
+            setMode('view');
+            setPendingChanges({});
+            setEditHistory([]);
         } else {
             setKeyValue("");
+            setParsedData([]);
         }
     }, [selectedKey]);
 
@@ -173,316 +228,384 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart }: { o
         }
     };
 
-    // ... ValueViewer Component ...
-    const ValueViewer = ({ value }: { value: string }) => {
-        try {
-            const parsed = JSON.parse(value);
+    // Calculate changes
+    const changeCount = Object.keys(pendingChanges).reduce((acc, rowIdx) => acc + Object.keys(pendingChanges[parseInt(rowIdx)]).length, 0);
 
-            // Array of Objects -> Table
-            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
-                const columns = Array.from(new Set(parsed.flatMap(Object.keys)));
-                return (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
-                            <TableIcon size={12} />
-                            <span>Table View ({parsed.length} items)</span>
-                        </div>
-                        <div className="flex-1 overflow-auto border border-white/5 rounded-xl bg-[#121214] shadow-inner custom-scrollbar">
-                            <table className="w-full text-left text-sm text-gray-400 border-collapse">
-                                <thead className="bg-[#18181b] text-gray-200 font-medium sticky top-0 z-10">
-                                    <tr>
-                                        <th className="px-4 py-3 border-b border-white/10 w-12 text-center bg-[#18181b]">#</th>
-                                        {columns.map(col => (
-                                            <th key={col} className="px-4 py-3 border-b border-white/10 whitespace-nowrap bg-[#18181b]">{col}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {parsed.map((row, i) => (
-                                        <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                            <td className="px-4 py-2 font-mono text-xs opacity-50 text-center border-r border-white/5">{i + 1}</td>
-                                            {columns.map(col => (
-                                                <td key={col} className="px-4 py-2 max-w-[250px] truncate border-r border-white/5 last:border-0" title={String((row as any)[col])}>
-                                                    {String((row as any)[col] ?? '')}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                );
+    const handleUndo = () => {
+        if (editHistory.length === 0) return;
+        const previousState = editHistory[editHistory.length - 1];
+        setPendingChanges(previousState);
+        setEditHistory(prev => prev.slice(0, -1));
+    };
+
+    const handleInputChange = (rowIndex: number, colName: string, val: string) => {
+        setEditHistory(prev => [...prev, JSON.parse(JSON.stringify(pendingChanges))]);
+
+        setPendingChanges(prev => {
+            const rowChanges = prev[rowIndex] || {};
+
+            // Check if value is reverting to original
+            const originalVal = String(parsedData[rowIndex][colName]);
+
+            if (val === originalVal) {
+                const { [colName]: _, ...rest } = rowChanges;
+                if (Object.keys(rest).length === 0) {
+                    const { [rowIndex]: __, ...restRows } = prev;
+                    return restRows;
+                }
+                return { ...prev, [rowIndex]: rest };
             }
-            // Object -> Key-Value Table
-            else if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                return (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
-                            <FileJson size={12} />
-                            <span>Structured View</span>
-                        </div>
-                        <div className="flex-1 overflow-auto border border-white/5 rounded-xl bg-[#121214] shadow-inner custom-scrollbar">
-                            <table className="w-full text-left text-sm text-gray-400 border-collapse">
-                                <thead className="bg-[#18181b] text-gray-200 font-medium sticky top-0 z-10">
-                                    <tr>
-                                        <th className="px-6 py-3 border-b border-white/10 w-1/3 bg-[#18181b]">Field</th>
-                                        <th className="px-6 py-3 border-b border-white/10 bg-[#18181b]">Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Object.entries(parsed).map(([k, v], i) => (
-                                        <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                            <td className="px-6 py-3 font-mono text-blue-400 border-r border-white/5">{k}</td>
-                                            <td className="px-6 py-3 text-gray-300 break-all">{String(v)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                );
+
+            return {
+                ...prev,
+                [rowIndex]: { ...rowChanges, [colName]: val }
+            };
+        });
+    };
+
+    const requestSave = () => {
+        const updates: any[] = [];
+        Object.entries(pendingChanges).forEach(([rowIdx, cols]) => {
+            Object.entries(cols).forEach(([colName, newVal]) => {
+                updates.push({
+                    rowIndex: parseInt(rowIdx),
+                    colName,
+                    newVal
+                });
+            });
+        });
+
+        if (updates.length === 0) return;
+
+        const message = (
+            <div>
+                <p className="mb-2">Update <span className="text-white font-bold">{updates.length}</span> value(s) for key <span className="text-blue-400">{selectedKey}</span>?</p>
+                <p className="text-xs text-gray-500">This will overwrite the current value in Redis.</p>
+            </div>
+        );
+
+        setConfirmState({
+            isOpen: true,
+            title: "Confirm Update",
+            message: message,
+            confirmText: "Apply Changes",
+            onConfirm: () => {
+                closeConfirm();
+                executeBatchUpdate();
             }
-        } catch (e) { }
+        });
+    };
+
+    const executeBatchUpdate = async () => {
+        setIsSaving(true);
+        try {
+            // Reconstruct the full object/string
+            const newData = [...parsedData];
+            Object.entries(pendingChanges).forEach(([idxStr, colChanges]) => {
+                const idx = parseInt(idxStr);
+                if (newData[idx]) {
+                    newData[idx] = { ...newData[idx], ...colChanges };
+                }
+            });
+
+            // Convert back to format Redis expects
+            // Check original keyValue to guess format? 
+            // Or infer from parsedData structure.
+            let valueToSave = "";
+
+            // If it was Key/Value table (from Object)
+            const isKeyValueTable = parsedData.length > 0 && 'Key' in parsedData[0] && 'Value' in parsedData[0] && Object.keys(parsedData[0]).length === 2;
+
+            if (isKeyValueTable) {
+                const obj: Record<string, any> = {};
+                newData.forEach((row: any) => {
+                    obj[row.Key] = row.Value;
+                });
+                valueToSave = JSON.stringify(obj);
+            } else if (parsedData.length === 1 && 'Value' in parsedData[0] && Object.keys(parsedData[0]).length === 1) {
+                // Simple string wrapped in object
+                valueToSave = newData[0].Value;
+            } else {
+                // Array logic
+                valueToSave = JSON.stringify(newData);
+            }
+
+            await invoke('redis_set_value', { key: selectedKey, value: valueToSave });
+
+            showToast("Saved successfully", 'success');
+            setParsedData(newData); // Optimistic-ish (backend matches)
+            setKeyValue(valueToSave);
+            setPendingChanges({});
+            setEditHistory([]);
+        } catch (err: any) {
+            console.error("Save failed", err);
+            showToast("Save failed: " + err, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const columns = useMemo(() => {
+        if (parsedData.length > 0) {
+            return Object.keys(parsedData[0]);
+        }
+        return ['Value'];
+    }, [parsedData]);
+
+    const renderTable = () => {
+        if (isLoading && parsedData.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500 animate-pulse">
+                    <Database size={32} className="mb-4 opacity-50" />
+                    <p className="text-sm font-medium">Loading data...</p>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-red-400">
+                    <AlertCircle size={32} className="mb-4" />
+                    <p className="text-sm font-medium">{error}</p>
+                </div>
+            );
+        }
+
+        if (!selectedKey) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-gray-600">
+                    <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4 border border-white/5">
+                        <Key size={32} className="opacity-50" />
+                    </div>
+                    <p className="text-lg font-medium text-gray-400">No Key Selected</p>
+                    <p className="text-sm">Select a key from the sidebar to view value</p>
+                </div>
+            );
+        }
 
         return (
-            <div className="w-full h-full bg-[#121214] border border-white/5 rounded-xl p-6 font-mono text-sm text-gray-300 whitespace-pre-wrap break-all shadow-inner overflow-auto custom-scrollbar">
-                {value}
+            <div className="flex-1 overflow-auto custom-scrollbar relative">
+                <table className="w-full text-left text-sm text-gray-300 border-collapse">
+                    <thead className="bg-[#18181b] sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            <th className="px-3 py-2 border-b border-white/10 w-10 text-center text-xs font-mono text-gray-500 bg-[#18181b]">#</th>
+                            {columns.map(col => (
+                                <th
+                                    key={col}
+                                    className="px-3 py-2 border-b border-white/10 text-xs font-bold text-gray-400 uppercase tracking-wider relative group select-none bg-[#18181b]"
+                                    style={{ width: colWidths[col] || 'auto' }}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Type size={10} className="text-blue-500/50" />
+                                        {col}
+                                    </div>
+                                    <div
+                                        className="absolute right-0 top-0 bottom-0 w-1 hover:bg-blue-500/50 cursor-col-resize transition-colors"
+                                        onMouseDown={(e) => startResize(e, col)}
+                                    />
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {parsedData.map((row, rowIdx) => {
+                            const rowChanges = pendingChanges[rowIdx] || {};
+                            const isRowDirty = Object.keys(rowChanges).length > 0;
+
+                            return (
+                                <tr key={rowIdx} className={`group transition-colors ${isRowDirty ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-white/5'}`}>
+                                    <td className="px-3 py-2 text-center text-xs font-mono text-gray-600 border-r border-white/5 bg-[#18181b]/30">
+                                        {rowIdx + 1}
+                                    </td>
+                                    {columns.map((col, colIdx) => {
+                                        const val = rowChanges[col] !== undefined ? rowChanges[col] : row[col];
+                                        const isDirty = rowChanges[col] !== undefined;
+
+                                        return (
+                                            <td key={`${rowIdx}-${col}`} className={`px-0 py-0 relative border-r border-white/5 last:border-0 p-0 ${isDirty ? 'bg-amber-900/20' : ''}`}>
+                                                {mode === 'edit' ? (
+                                                    <>
+                                                        <input
+                                                            type="text"
+                                                            value={val}
+                                                            onChange={(e) => handleInputChange(rowIdx, col, e.target.value)}
+                                                            className={`w-full h-full px-3 py-2 bg-transparent border-none outline-none focus:ring-1 focus:ring-inset focus:ring-blue-500/50 transition-all font-mono text-xs ${isDirty ? 'text-amber-200 font-medium' : 'text-gray-300'}`}
+                                                            spellCheck={false}
+                                                        />
+                                                        {isDirty && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-500 rounded-full pointer-events-none" />}
+                                                    </>
+                                                ) : (
+                                                    <div className={`px-3 py-2 truncate text-xs font-mono h-full block ${isDirty ? 'text-amber-200' : 'text-gray-300'}`} title={String(val)}>
+                                                        {String(val)}
+                                                    </div>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
             </div>
         );
     };
 
     return (
         <div className="flex w-full h-full bg-transparent text-gray-300 font-sans overflow-hidden selection:bg-blue-500/30">
-            {/* Sidebar */}
-            <div className="w-80 bg-[#0c0c0e]/50 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
-                {/* Fixed Header */}
-                <div className="p-4 border-b border-white/5 cursor-move" onPointerDown={onDragStart}>
-                    <div className="flex items-center justify-between mb-4 px-2">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                                <Database size={18} />
-                            </div>
-                            <span className="font-bold text-white tracking-wide">Redis Explorer</span>
-                        </div>
-                        <button onClick={startCreating} className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors" title="Add New Key">
-                            <Plus size={18} />
-                        </button>
-                    </div>
-
+            {/* Sidebar (Keys) */}
+            <div className="w-64 bg-[#0c0c0e]/50 backdrop-blur-xl border-r border-white/5 flex flex-col z-20">
+                <div className="p-3 border-b border-white/5 cursor-move" onPointerDown={onDragStart}>
                     <div className="relative group">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={16} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={14} />
                         <input
                             type="text"
-                            placeholder="Search keys..."
+                            placeholder="Filter keys..."
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            className="w-full bg-[#18181b] border border-white/5 rounded-xl py-2.5 pl-10 pr-10 text-sm text-gray-300 focus:outline-none focus:border-blue-500/30 focus:bg-[#1c1c1f] transition-all placeholder:text-gray-600 shadow-sm"
+                            className="w-full bg-[#18181b] border border-white/5 rounded-lg py-1.5 pl-9 pr-3 text-xs text-gray-300 focus:outline-none focus:border-blue-500/30 focus:bg-[#1c1c1f] transition-all placeholder:text-gray-600 shadow-sm"
                         />
-                        <button onClick={fetchKeys} disabled={isLoading} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors disabled:opacity-50">
-                            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="px-2 py-2 space-y-0.5">
+                        {keys.length === 0 && !isLoading ? (
+                            <div className="text-center py-8 text-gray-600 text-xs">No keys found</div>
+                        ) : (
+                            keys.map(key => (
+                                <div
+                                    key={key}
+                                    onClick={() => setSelectedKey(key)}
+                                    className={`w-full text-left px-3 py-2 rounded-md transition-all text-xs font-medium cursor-pointer truncate flex items-center gap-2 ${selectedKey === key ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'}`}
+                                >
+                                    <Key size={12} className={selectedKey === key ? 'text-blue-500' : 'text-gray-600'} />
+                                    {key}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+                {/* Footer Actions */}
+                <div className="p-3 border-t border-white/5 flex items-center justify-between text-xs bg-[#0c0c0e]/50">
+                    <span className="text-gray-500 font-mono">{keys.length} Keys</span>
+                    <div className="flex items-center gap-1">
+                        <button onClick={fetchKeys} className="p-1.5 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors" title="Refresh">
+                            <RefreshCw size={14} />
+                        </button>
+                        <button onClick={onDisconnect} className="p-1.5 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors" title="Disconnect">
+                            <LogOut size={14} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden backdrop-blur-md">
+                {/* Header */}
+                <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#0c0c0e]/30 z-20 cursor-move" onPointerDown={onDragStart}>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => { onClose(); onClose(); }} className="md:hidden p-2 -ml-2 text-gray-400">
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                                <Database size={18} className="text-blue-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                                    Redis
+                                    {selectedKey && (
+                                        <>
+                                            <span className="text-gray-600">/</span>
+                                            <span className="text-blue-400 font-mono">{selectedKey}</span>
+                                        </>
+                                    )}
+                                </h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* Batch Action Bar */}
+                        {changeCount > 0 && (
+                            <div className="flex items-center gap-2 animate-in slide-in-from-top-2 duration-200 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg mr-4">
+                                <span className="text-xs font-semibold text-blue-300 ml-1">{changeCount} changes</span>
+                                <div className="h-4 w-[1px] bg-blue-500/20 mx-1" />
+                                {editHistory.length > 0 && (
+                                    <button
+                                        onClick={handleUndo}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-md text-xs font-medium flex items-center gap-1.5 border border-white/5 transition-all mr-1"
+                                        title="Undo last change"
+                                    >
+                                        <RotateCcw size={12} className="scale-x-[-1]" /> Undo
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setPendingChanges({})}
+                                    className="px-3 py-1.5 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-md text-xs font-medium transition-colors"
+                                >
+                                    Discard
+                                </button>
+                                <button
+                                    onClick={requestSave}
+                                    disabled={isSaving}
+                                    className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-green-500/20 transition-all"
+                                >
+                                    {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                </button>
+                            </div>
+                        )}
+
+                        {selectedKey && (
+                            <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/10">
+                                <button
+                                    onClick={() => { setMode('view'); setPendingChanges({}); }}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'view' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                                >
+                                    <Eye size={14} /> View
+                                </button>
+                                <button
+                                    onClick={() => setMode('edit')}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'edit' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                                >
+                                    <Pencil size={14} /> Edit
+                                </button>
+                            </div>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors">
+                            <X size={18} />
                         </button>
                     </div>
                 </div>
 
-                {/* Error Banner */}
-                {error && (
-                    <div className="mx-4 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
-                        <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-red-300 leading-tight break-all">{error}</p>
-                    </div>
-                )}
+                {renderTable()}
 
-                {/* Key List */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {keys.length === 0 && !isLoading ? (
-                        <div className="flex flex-col items-center justify-center h-48 opacity-60">
-                            <span className="text-sm text-gray-500 mb-3">No keys found</span>
-                            <button onClick={startCreating} className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 transition-all hover:bg-blue-500/20">
-                                <Plus size={12} /> Add Key
-                            </button>
-                        </div>
-                    ) : (
-                        keys.map(key => (
-                            <button
-                                key={key}
-                                onClick={() => setSelectedKey(key)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left transition-all ${selectedKey === key
-                                    ? 'bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20'
-                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
-                                    }`}
-                            >
-                                <Key size={14} className="opacity-70 shrink-0" />
-                                <span className="truncate">{key}</span>
-                                {selectedKey === key && <ChevronRight size={14} className="ml-auto opacity-50" />}
-                            </button>
-                        ))
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
-                    <span>{keys.length} Keys found</span>
-                    <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
-                        <LogOut size={14} /> <span className="font-medium">Disconnect</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
-                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
-                    {isCreating || isEditing ? (
-                        <div className="flex items-center gap-4 flex-1">
-                            <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{isCreating ? "Creating New Key" : "Editing Key"}</span>
-                                <input
-                                    value={editKeyName}
-                                    onChange={e => setEditKeyName(e.target.value)}
-                                    placeholder="Enter key name..."
-                                    className={`bg-transparent text-white font-medium text-lg focus:outline-none placeholder:text-gray-600 border-b border-transparent focus:border-blue-500 transition-all`}
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-4 overflow-hidden">
-                            {selectedKey ? (
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Key</span>
-                                    <span className="text-white font-medium truncate text-lg">{selectedKey}</span>
-                                </div>
-                            ) : (
-                                <span className="text-gray-500 text-sm">Select a key to view value</span>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                        {isCreating || isEditing ? (
-                            <>
-                                <button onClick={cancelEdit} className="px-4 py-2 rounded-lg text-gray-400 hover:text-white text-sm font-medium transition-colors">Cancel</button>
-                                <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors shadow-lg shadow-blue-500/20">
-                                    <Save size={16} /> Save
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                {selectedKey && (
-                                    <>
-                                        <button onClick={startEditing} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-blue-400 transition-colors" title="Edit Content">
-                                            <Pencil size={18} />
-                                        </button>
-                                        <button onClick={() => fetchValue(selectedKey)} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors" title="Reload Value">
-                                            <RefreshCw size={18} />
-                                        </button>
-                                    </>
-                                )}
-                                <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors" title="Close Window">
-                                    <X size={18} />
-                                </button>
-                            </>
+                {/* Footer (Status) */}
+                <div className="h-9 border-t border-white/5 bg-[#0c0c0e]/30 flex items-center justify-between px-4 text-[10px] text-gray-500 font-mono cursor-default select-none z-20">
+                    <div className="flex items-center gap-4">
+                        {selectedKey && (
+                            <span>Rows: <span className="text-gray-300">{parsedData.length}</span></span>
                         )}
+                        {/* Pagination placeholder if needed */}
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden p-6 relative">
-                    <div className="absolute inset-0 bg-grid-white/[0.02] pointer-events-none" />
-
-                    {isCreating || isEditing ? (
-                        <div className="h-full flex flex-col space-y-4">
-                            <div className="flex items-center gap-2 border-b border-white/5 pb-4">
-                                <button
-                                    onClick={() => setEditMode('structured')}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${editMode === 'structured' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    <TableIcon size={14} /> Table Editor
-                                </button>
-                                <button
-                                    onClick={() => setEditMode('raw')}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${editMode === 'raw' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    <Type size={14} /> Raw Text
-                                </button>
-                            </div>
-
-                            <div className="flex-1 min-h-0 bg-[#121214] border border-white/5 rounded-xl shadow-inner overflow-hidden">
-                                {editMode === 'structured' ? (
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex-1 overflow-auto custom-scrollbar">
-                                            <table className="w-full text-left text-sm text-gray-400 border-collapse">
-                                                <thead className="bg-[#18181b] text-gray-200 font-medium sticky top-0 z-10 shadow-sm">
-                                                    <tr>
-                                                        <th className="px-4 py-3 border-b border-white/10 w-1/2">Field / Property</th>
-                                                        <th className="px-4 py-3 border-b border-white/10 w-1/2">Value</th>
-                                                        <th className="px-2 py-3 border-b border-white/10 w-10"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {editRows.map((row) => (
-                                                        <tr key={row.id} className="border-b border-white/5 hover:bg-white/5 group">
-                                                            <td className="p-0 border-r border-white/5">
-                                                                <input
-                                                                    value={row.field}
-                                                                    onChange={e => updateRow(row.id, 'field', e.target.value)}
-                                                                    placeholder="Property name"
-                                                                    className="w-full bg-transparent px-4 py-3 focus:outline-none focus:bg-blue-500/5 transition-colors placeholder:text-gray-700 font-mono text-blue-400"
-                                                                />
-                                                            </td>
-                                                            <td className="p-0 border-r border-white/5">
-                                                                <input
-                                                                    value={row.value}
-                                                                    onChange={e => updateRow(row.id, 'value', e.target.value)}
-                                                                    placeholder="Value"
-                                                                    className="w-full bg-transparent px-4 py-3 focus:outline-none focus:bg-blue-500/5 transition-colors placeholder:text-gray-700 text-gray-300"
-                                                                />
-                                                            </td>
-                                                            <td className="text-center">
-                                                                <button onClick={() => removeRow(row.id)} className="p-2 text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        <div className="p-3 border-t border-white/5 bg-[#18181b]">
-                                            <button onClick={addRow} className="flex items-center gap-2 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors">
-                                                <Plus size={14} /> Add Property
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <textarea
-                                        value={rawEditValue}
-                                        onChange={e => setRawEditValue(e.target.value)}
-                                        className="w-full h-full bg-transparent p-6 text-sm font-mono text-gray-300 resize-none focus:outline-none"
-                                        placeholder="Enter raw text or JSON..."
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        selectedKey ? (
-                            <div className="h-full flex flex-col space-y-4">
-                                <div className="flex items-center justify-between shrink-0">
-                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Value Content</span>
-                                </div>
-                                <div className="flex-1 min-h-0">
-                                    <ValueViewer value={keyValue} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full opacity-30 gap-6">
-                                <div className="w-24 h-24 rounded-3xl bg-white/5 flex items-center justify-center border border-white/5">
-                                    <Database size={48} className="text-gray-500" />
-                                </div>
-                                <p className="text-lg font-medium text-gray-500">Pick a key from the sidebar</p>
-                            </div>
-                        )
-                    )}
-                </div>
+                <ConfirmDialog
+                    isOpen={confirmState?.isOpen || false}
+                    title={confirmState?.title || ""}
+                    message={confirmState?.message}
+                    onConfirm={confirmState?.onConfirm || (() => { })}
+                    onCancel={closeConfirm}
+                    confirmText={confirmState?.confirmText}
+                    isDestructive={confirmState?.isDestructive}
+                />
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    isVisible={toast.isVisible}
+                    onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
+                />
             </div>
         </div>
     );

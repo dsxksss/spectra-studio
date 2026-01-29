@@ -3,7 +3,8 @@ import {
     X,
     Minus,
     GripVertical,
-    Database
+    Database,
+    FileJson
 } from "lucide-react";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -181,6 +182,7 @@ export default function FloatingApp() {
 
     const getServiceIcon = (service: string | null, size = 18) => {
         if (!service) return <Database size={size} />;
+        if (service === 'SQLite') return <FileJson size={size} className="text-blue-400" />;
         return <Database size={size} className={service ? "text-blue-400" : ""} />;
     };
 
