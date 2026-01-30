@@ -85,7 +85,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function RedisManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+export default function RedisManager({ onClose: _onClose, onDisconnect, onDragStart, connectionName }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
     const { t } = useTranslation();
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);

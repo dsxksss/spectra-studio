@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -33,7 +33,7 @@ export function useResize(minWidth = 1200, minHeight = 800) {
         const {
             startX, startY, startWinX, startWinY,
             startWidth, startHeight,
-            factor, corner, workArea
+            factor, corner, workArea: _workArea
         } = resizeState.current;
 
         const currentX = mousePos.current.x;

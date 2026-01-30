@@ -86,7 +86,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function PostgresManager({ onClose, onDisconnect, onDragStart, connectionName, config }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string, config?: any }) {
+export default function PostgresManager({ onDisconnect, onDragStart, connectionName, config }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string, config?: any }) {
     const { t } = useTranslation();
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);

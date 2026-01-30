@@ -86,7 +86,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function MySQLManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+export default function MySQLManager({ onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
     const { t } = useTranslation();
     const [, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
