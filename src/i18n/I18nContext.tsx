@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { resources, LocaleKey } from './locales';
 
 type Language = 'en' | 'zh';
@@ -12,14 +12,25 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-    const [language, setLanguage] = useState<Language>('zh');
-
-    useEffect(() => {
+    const [language, setLanguage] = useState<Language>(() => {
         const saved = localStorage.getItem('app_language') as Language;
         if (saved && (saved === 'en' || saved === 'zh')) {
-            setLanguage(saved);
+            return saved;
         }
-    }, []);
+
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.startsWith('en')) {
+            return 'en';
+        }
+        // Start with 'zh' or default to 'zh'
+        if (browserLang.startsWith('zh')) {
+            return 'zh';
+        }
+
+        return 'zh'; // Default fallback
+    });
+
+
 
     const changeLanguage = (lang: Language) => {
         setLanguage(lang);
