@@ -904,7 +904,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                 >
                                     <div className="flex items-center gap-2 truncate flex-1">
                                         <Key size={12} className={selectedKey === key ? 'text-blue-500' : 'text-gray-600'} />
-                                        {key}
+                                        <span className="truncate" title={key}>{key}</span>
                                     </div>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleDeleteKey(key); }}

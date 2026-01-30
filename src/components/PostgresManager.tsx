@@ -4,6 +4,7 @@ import {
     RefreshCw,
     ChevronRight,
     ChevronLeft,
+    ChevronDown,
     X,
     LogOut,
     Table as TableIcon,
@@ -16,7 +17,10 @@ import {
     Plus,
     Terminal,
     Hash,
-    Trash2
+    Trash2,
+    Database,
+    FolderOpen,
+    Folder
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
@@ -79,13 +83,34 @@ const ConfirmDialog = ({
     );
 };
 
-export default function PostgresManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+export default function PostgresManager({ onClose, onDisconnect, onDragStart, connectionName, config }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string, config?: any }) {
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
     const [filter, setFilter] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Database switching (read-only for PostgreSQL - requires reconnection)
+    const SYSTEM_DATABASES = ['postgres', 'template0', 'template1'];
+    const [databases, setDatabases] = useState<string[]>([]);
+    const [selectedDatabase, setSelectedDatabase] = useState<string | null>(null);
+    const [expandedDatabases, setExpandedDatabases] = useState<Set<string>>(new Set());
+    const [databaseSizes, setDatabaseSizes] = useState<Record<string, number>>({});
+    const [views, setViews] = useState<string[]>([]);
+    const [functions, setFunctions] = useState<string[]>([]);
+    const [procedures, setProcedures] = useState<string[]>([]);
+    const [showSystemDatabases, setShowSystemDatabases] = useState(false);
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['tables']));
+    const [tableSizes, setTableSizes] = useState<Record<string, number>>({});
+
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
 
     // View Switching
     const [activeView, setActiveView] = useState<'browser' | 'console' | 'create-table'>('browser');
@@ -275,18 +300,151 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
     };
 
 
+    const fetchDatabases = async () => {
+        try {
+            const result = await invoke<[string, number][]>('postgres_get_databases');
+            const dbs = result.map(([name]) => name).sort();
+
+            const sizes: Record<string, number> = {};
+            result.forEach(([name, size]) => { sizes[name] = size; });
+            setDatabaseSizes(sizes);
+
+            setDatabases(dbs);
+            // Auto-expand the connected database (extract from connection string)
+            if (dbs.length > 0 && !selectedDatabase) {
+                // For PostgreSQL, we can only view the current connected database's tables
+                // but can see the list of all databases
+                const connectedDb = connectionName?.split('/')[0]?.split('@')[0] || dbs[0];
+                const foundDb = dbs.find(d => connectedDb.includes(d)) || dbs[0];
+                setSelectedDatabase(foundDb);
+                setExpandedDatabases(new Set([foundDb]));
+            }
+        } catch (err: any) {
+            console.error("Failed to fetch databases", err);
+        }
+    };
+
+    const handleSwitchDatabase = async (targetDb: string) => {
+        if (!config) {
+            showToast(`Cannot auto-switch: Connection info missing. Please reconnect manually.`, 'error');
+            return false;
+        }
+
+        setIsLoading(true);
+        try {
+            await invoke('connect_postgres', {
+                host: config.host,
+                port: typeof config.port === 'string' ? parseInt(config.port, 10) : config.port,
+                username: config.username,
+                password: config.password || null,
+                database: targetDb,
+                timeout_sec: 5
+            });
+
+            setSelectedDatabase(targetDb);
+            setExpandedDatabases(new Set([targetDb]));
+
+            // Refresh schema
+            const tablesWithSize = await invoke<[string, number][]>('postgres_get_tables_with_size');
+            const tableNames = tablesWithSize.map(([name]) => name).sort();
+
+            const sizeMap: Record<string, number> = {};
+            tablesWithSize.forEach(([name, size]) => {
+                sizeMap[name] = size;
+            });
+
+            setTableSizes(sizeMap);
+            setKeys(tableNames);
+
+            // Reset selection
+            if (tableNames.length > 0) {
+                setSelectedKey(tableNames[0]);
+            } else {
+                setSelectedKey(null);
+            }
+
+            // Fetch other objects
+            try {
+                const viewsRes = await invoke<string[]>('postgres_get_views');
+                setViews(viewsRes.sort());
+                const funcsRes = await invoke<string[]>('postgres_get_functions');
+                setFunctions(funcsRes.sort());
+                const procsRes = await invoke<string[]>('postgres_get_procedures');
+                setProcedures(procsRes.sort());
+            } catch (objErr) {
+                console.warn("Failed to fetch additional objects", objErr);
+            }
+
+            showToast(`Switched to ${targetDb}`, 'success');
+            return true;
+
+        } catch (err: any) {
+            console.error("Failed to switch database", err);
+            showToast(`Failed switch to ${targetDb}: ${err}`, 'error');
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const toggleDatabaseExpand = async (db: string) => {
+        // If clicking a different database, try to switch to it
+        if (db !== selectedDatabase) {
+            if (config) {
+                await handleSwitchDatabase(db);
+                return;
+            } else {
+                showToast(`PostgreSQL requires reconnection to switch databases. Current: ${selectedDatabase}`, 'info');
+            }
+        }
+
+        const newSet = new Set(expandedDatabases);
+        if (newSet.has(db)) {
+            newSet.delete(db);
+        } else {
+            newSet.add(db);
+        }
+        setExpandedDatabases(newSet);
+    };
+
     const fetchKeys = async () => {
         setIsLoading(true);
         setError(null);
         try {
-            let res: string[] = [];
-            res = await invoke<string[]>('postgres_get_tables');
-            setKeys(res.sort());
+            // Fetch tables with size
+            const tablesWithSize = await invoke<[string, number][]>('postgres_get_tables_with_size');
+            const tableNames = tablesWithSize.map(([name]) => name).sort();
+
+            const sizeMap: Record<string, number> = {};
+            tablesWithSize.forEach(([name, size]) => {
+                sizeMap[name] = size;
+            });
+
+            setTableSizes(sizeMap);
+            setKeys(tableNames);
 
             // Automatically select the first table if available
-            if (res.length > 0) {
-                setSelectedKey(res[0]);
+            if (tableNames.length > 0) {
+                setSelectedKey(tableNames[0]);
             }
+
+            // Fetch views
+            try {
+                const viewsRes = await invoke<string[]>('postgres_get_views');
+                setViews(viewsRes.sort());
+            } catch { setViews([]); }
+
+            // Fetch functions
+            try {
+                const funcsRes = await invoke<string[]>('postgres_get_functions');
+                setFunctions(funcsRes.sort());
+            } catch { setFunctions([]); }
+
+            // Fetch procedures
+            try {
+                const procsRes = await invoke<string[]>('postgres_get_procedures');
+                setProcedures(procsRes.sort());
+            } catch { setProcedures([]); }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
             setError(typeof err === 'string' ? err : "Failed to fetch tables.");
@@ -294,6 +452,19 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Toggle folder expansion
+    const toggleFolder = (folderId: string) => {
+        setExpandedFolders(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(folderId)) {
+                newSet.delete(folderId);
+            } else {
+                newSet.add(folderId);
+            }
+            return newSet;
+        });
     };
 
     const fetchTableData = async (table: string, p: number) => {
@@ -341,6 +512,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
     };
 
     useEffect(() => {
+        fetchDatabases();
         fetchKeys();
     }, []);
 
@@ -1109,48 +1281,202 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                     </div>
                 )}
 
-                {/* Table List */}
+                {/* Database Tree List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {keys.length === 0 && !isLoading ? (
+                    {databases.length === 0 && !isLoading ? (
                         <div className="flex flex-col items-center justify-center h-48 opacity-60">
-                            <span className="text-sm text-gray-500 mb-3">No tables found</span>
+                            <span className="text-sm text-gray-500 mb-3">No databases found</span>
                         </div>
                     ) : (
-                        keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
-                            <div
-                                key={key}
-                                className={`group w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left transition-all ${selectedKey === key && activeView === 'browser'
-                                    ? 'bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20'
-                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
-                                    }`}
-                            >
-                                <button
-                                    onClick={() => { setSelectedKey(key); setActiveView('browser'); }}
-                                    className="flex-1 flex items-center gap-3 min-w-0"
-                                >
-                                    <TableIcon size={14} className="opacity-70 shrink-0" />
-                                    <span className="truncate">{key}</span>
-                                </button>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <>
+                            {/* User Databases */}
+                            {databases
+                                .filter(db => !SYSTEM_DATABASES.includes(db.toLowerCase()))
+                                .filter(db => db.toLowerCase().includes(filter.toLowerCase()) ||
+                                    (expandedDatabases.has(db) && keys.some(k => k.toLowerCase().includes(filter.toLowerCase())))
+                                )
+                                .map(db => (
+                                    <div key={db} className="mb-1">
+                                        {/* Database Node */}
+                                        <button
+                                            onClick={() => toggleDatabaseExpand(db)}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-all ${selectedDatabase === db
+                                                ? 'bg-blue-500/10 text-blue-400'
+                                                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                }`}
+                                        >
+                                            {expandedDatabases.has(db) ? (
+                                                <ChevronDown size={14} className="shrink-0 opacity-50" />
+                                            ) : (
+                                                <ChevronRight size={14} className="shrink-0 opacity-50" />
+                                            )}
+                                            <Database size={14} className="shrink-0 opacity-70" />
+                                            <span className="truncate flex-1">{db}</span>
+                                            {databaseSizes[db] !== undefined && (
+                                                <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap shrink-0 mr-2">
+                                                    {formatBytes(databaseSizes[db])}
+                                                </span>
+                                            )}
+                                            {selectedDatabase === db && (
+                                                <span className="text-[10px] bg-blue-500/20 px-1.5 py-0.5 rounded text-blue-400">connected</span>
+                                            )}
+                                        </button>
+
+                                        {/* Schema folders under connected database */}
+                                        {expandedDatabases.has(db) && selectedDatabase === db && (
+                                            <div className="ml-4 mt-1 border-l border-white/5 pl-2">
+                                                {/* Tables folder */}
+                                                <button
+                                                    onClick={() => toggleFolder('tables')}
+                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                >
+                                                    {expandedFolders.has('tables') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    {keys.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
+                                                    <span>Tables ({keys.length})</span>
+                                                </button>
+                                                {expandedFolders.has('tables') && keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
+                                                    <div
+                                                        key={key}
+                                                        className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === key && activeView === 'browser'
+                                                            ? 'bg-blue-500/10 text-blue-400 font-medium'
+                                                            : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                            }`}
+                                                    >
+                                                        <button onClick={() => { setSelectedKey(key); setActiveView('browser'); }} className="flex-1 flex items-center gap-2 min-w-0">
+                                                            <TableIcon size={12} className="opacity-70 shrink-0" />
+                                                            <span className="truncate" title={key}>{key}</span>
+                                                            {tableSizes[key] !== undefined && (
+                                                                <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
+                                                                    {formatBytes(tableSizes[key])}
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
+                                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                                            title="Drop Table"
+                                                        >
+                                                            <Trash2 size={10} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+
+                                                {/* Views folder */}
+                                                <button
+                                                    onClick={() => toggleFolder('views')}
+                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                >
+                                                    {expandedFolders.has('views') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    <Eye size={12} />
+                                                    <span>Views ({views.length})</span>
+                                                </button>
+                                                {expandedFolders.has('views') && views.map(view => (
+                                                    <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                        <Eye size={12} className="opacity-50" />
+                                                        <span className="truncate">{view}</span>
+                                                    </div>
+                                                ))}
+
+                                                {/* Functions folder */}
+                                                <button
+                                                    onClick={() => toggleFolder('functions')}
+                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                >
+                                                    {expandedFolders.has('functions') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    <Hash size={12} />
+                                                    <span>Functions ({functions.length})</span>
+                                                </button>
+                                                {expandedFolders.has('functions') && functions.map(func => (
+                                                    <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                        <Hash size={12} className="opacity-50" />
+                                                        <span className="truncate">{func}</span>
+                                                    </div>
+                                                ))}
+
+                                                {/* Procedures folder */}
+                                                <button
+                                                    onClick={() => toggleFolder('procedures')}
+                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                >
+                                                    {expandedFolders.has('procedures') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    <Terminal size={12} />
+                                                    <span>Procedures ({procedures.length})</span>
+                                                </button>
+                                                {expandedFolders.has('procedures') && procedures.map(proc => (
+                                                    <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                        <Terminal size={12} className="opacity-50" />
+                                                        <span className="truncate">{proc}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Show message for non-connected databases */}
+                                        {expandedDatabases.has(db) && selectedDatabase !== db && (
+                                            <div className="ml-6 mt-1 px-3 py-2 text-xs text-gray-600 italic">
+                                                Reconnect to view tables
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                            {/* System Databases Folder */}
+                            {showSystemDatabases && databases.some(db => SYSTEM_DATABASES.includes(db.toLowerCase())) && (
+                                <div className="mt-4 pt-3 border-t border-white/5">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
-                                        className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-colors"
-                                        title="Drop Table"
+                                        onClick={() => toggleFolder('__system__')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:text-gray-400 transition-colors"
                                     >
-                                        <Trash2 size={12} />
+                                        {expandedFolders.has('__system__') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                        <Folder size={12} />
+                                        <span>System Databases ({databases.filter(db => SYSTEM_DATABASES.includes(db.toLowerCase())).length})</span>
                                     </button>
-                                    {selectedKey === key && <ChevronRight size={14} className="opacity-50" />}
+
+                                    {expandedFolders.has('__system__') && databases
+                                        .filter(db => SYSTEM_DATABASES.includes(db.toLowerCase()))
+                                        .map(db => (
+                                            <div key={db} className="ml-4">
+                                                <button
+                                                    onClick={() => toggleDatabaseExpand(db)}
+                                                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-left transition-all ${selectedDatabase === db
+                                                        ? 'bg-blue-500/10 text-blue-400'
+                                                        : 'text-gray-500 hover:bg-white/5 hover:text-gray-400'
+                                                        }`}
+                                                >
+                                                    {expandedDatabases.has(db) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    <Database size={12} className="opacity-50" />
+                                                    <span className="truncate flex-1">{db}</span>
+                                                    {databaseSizes[db] !== undefined && (
+                                                        <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap shrink-0 mr-1 opacity-70">
+                                                            {formatBytes(databaseSizes[db])}
+                                                        </span>
+                                                    )}
+                                                    {selectedDatabase === db && (
+                                                        <span className="text-[10px] bg-blue-500/20 px-1 py-0.5 rounded text-blue-400">connected</span>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        ))}
                                 </div>
-                            </div>
-                        ))
+                            )}
+                        </>
                     )}
                 </div>
 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
-                    <span>{keys.length} Tables</span>
                     <div className="flex items-center gap-2">
-                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
+                        <span>{databases.filter(db => !SYSTEM_DATABASES.includes(db.toLowerCase())).length} Databases · {keys.length} Tables</span>
+                        <button
+                            onClick={() => setShowSystemDatabases(!showSystemDatabases)}
+                            className={`text-[10px] px-2 py-0.5 rounded transition-colors ${showSystemDatabases ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500 hover:text-gray-400'}`}
+                            title={showSystemDatabases ? "Hide system databases" : "Show system databases"}
+                        >
+                            {showSystemDatabases ? 'sys ✓' : 'sys'}
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => { fetchDatabases(); fetchKeys(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
                             <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
                         </button>
                         <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">

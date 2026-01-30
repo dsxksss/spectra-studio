@@ -39,6 +39,7 @@ export default function FloatingApp() {
     const [viewMode, setViewMode] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [connectedService, setConnectedService] = useState<string | null>(null);
     const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
+    const [connectionConfig, setConnectionConfig] = useState<any>(null);
     const [visibleContent, setVisibleContent] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [contentOpacity, setContentOpacity] = useState(1);
 
@@ -267,13 +268,15 @@ export default function FloatingApp() {
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
+                                    config={connectionConfig}
                                 />
                             ) : (
                                 <DatabaseManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onConnect={(s: string, n: string) => {
+                                    onConnect={(s: string, n: string, config: any) => {
                                         setConnectedService(s);
                                         setCurrentConnectionName(n);
+                                        setConnectionConfig(config);
                                     }}
                                     activeService={connectedService}
                                     onDragStart={handleDragStart}
@@ -291,11 +294,11 @@ export default function FloatingApp() {
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
+                            className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
                         >
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 {getServiceIcon(connectedService)}
-                                <span className="text-sm font-medium truncate max-w-[220px]" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : 'Connect'}</span>
+                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : 'Connect'}</span>
                             </div>
 
                             {

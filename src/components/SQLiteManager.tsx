@@ -1115,7 +1115,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                     className="flex-1 flex items-center gap-3 min-w-0"
                                 >
                                     <TableIcon size={14} className="opacity-70 shrink-0" />
-                                    <span className="truncate">{key}</span>
+                                    <span className="truncate" title={key}>{key}</span>
                                 </button>
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button

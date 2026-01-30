@@ -137,7 +137,7 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
     </div>
 );
 
-export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
+export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string, config?: any) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
     const [selectedService, setSelectedService] = useState(activeService || 'PostgreSQL');
     const [showPassword, setShowPassword] = useState(false);
 
@@ -399,7 +399,15 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             console.log(res);
             showToast(`${service} Connection Successful`, 'success');
             if (!isTestOnly && onConnect) {
-                onConnect(service, connectionName || 'Unsaved Connection');
+                const config = {
+                    host: hostStr,
+                    port: portStr,
+                    username: usernameArg,
+                    password: passwordArg,
+                    database: dbArg,
+                    type: service
+                };
+                onConnect(service, connectionName || 'Unsaved Connection', config);
             }
         } catch (err: any) {
             console.error(`${service} Connection Failed:`, err);

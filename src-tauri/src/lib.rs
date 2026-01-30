@@ -694,6 +694,136 @@ async fn mysql_update_cell(state: State<'_, AppState>, table_name: String, pk_co
 }
 
 #[tauri::command]
+async fn mysql_get_databases(state: State<'_, AppState>) -> Result<Vec<(String, i64)>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // Query information_schema for size. 
+    // Uses LEFT JOIN to include empty databases (size as 0).
+    // CAST to SIGNED is crucial for type safety.
+    let query = "
+        SELECT 
+            CONVERT(s.schema_name USING utf8) as schema_name, 
+            CAST(COALESCE(SUM(t.data_length + t.index_length), 0) AS SIGNED) as size
+        FROM information_schema.schemata s
+        LEFT JOIN information_schema.tables t ON s.schema_name = t.table_schema
+        GROUP BY s.schema_name
+        ORDER BY s.schema_name
+    ";
+
+    let rows: Vec<(String, i64)> = sqlx::query_as(query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
+async fn mysql_use_database(state: State<'_, AppState>, database: String) -> Result<(), String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    // USE command is not supported in prepared statement protocol
+    // We need to use raw_sql instead
+    let q = format!("USE `{}`", database);
+    sqlx::raw_sql(&q)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// Get tables with size info for a specific database (doesn't change current database)
+#[tauri::command]
+async fn mysql_get_tables_with_size(state: State<'_, AppState>, database: String) -> Result<Vec<(String, i64)>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let query = format!(
+        "SELECT CONVERT(TABLE_NAME USING utf8) as TABLE_NAME, CAST(COALESCE(DATA_LENGTH + INDEX_LENGTH, 0) AS SIGNED) as size \
+         FROM information_schema.TABLES \
+         WHERE TABLE_SCHEMA = '{}' \
+         ORDER BY TABLE_NAME",
+        database
+    );
+    
+    let rows: Vec<(String, i64)> = sqlx::query_as(&query)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
+async fn mysql_get_views(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn mysql_get_functions(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT CONVERT(ROUTINE_NAME USING utf8) FROM information_schema.ROUTINES WHERE ROUTINE_TYPE = 'FUNCTION' AND ROUTINE_SCHEMA = DATABASE()")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn mysql_get_procedures(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.mysql_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT CONVERT(ROUTINE_NAME USING utf8) FROM information_schema.ROUTINES WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_SCHEMA = DATABASE()")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_databases(state: State<'_, AppState>) -> Result<Vec<(String, i64)>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String, i64)> = sqlx::query_as("SELECT datname::text, pg_database_size(datname) as size FROM pg_database WHERE datistemplate = false ORDER BY datname")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
 async fn postgres_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let pool = {
         let guard = state.pg_pool.lock().unwrap();
@@ -701,6 +831,69 @@ async fn postgres_get_tables(state: State<'_, AppState>) -> Result<Vec<String>, 
     };
 
     let rows: Vec<(String,)> = sqlx::query_as("SELECT table_name::text FROM information_schema.tables WHERE table_schema = 'public'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_tables_with_size(state: State<'_, AppState>) -> Result<Vec<(String, i64)>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT table_name::text, pg_total_relation_size(quote_ident(table_name)) as size \
+         FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
+async fn postgres_get_views(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT table_name::text FROM information_schema.views WHERE table_schema = 'public'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_functions(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT routine_name::text FROM information_schema.routines WHERE routine_type = 'FUNCTION' AND routine_schema = 'public'")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[tauri::command]
+async fn postgres_get_procedures(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pool = {
+        let guard = state.pg_pool.lock().unwrap();
+        guard.clone().ok_or("Not connected")?
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT routine_name::text FROM information_schema.routines WHERE routine_type = 'PROCEDURE' AND routine_schema = 'public'")
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -1352,7 +1545,18 @@ pub fn run() {
         redis_rename_key,
         mysql_rename_table,
         postgres_rename_table,
-        sqlite_rename_table
+        sqlite_rename_table,
+        mysql_get_databases,
+        mysql_use_database,
+        mysql_get_tables_with_size,
+        mysql_get_views,
+        mysql_get_functions,
+        mysql_get_procedures,
+        postgres_get_databases,
+        postgres_get_tables_with_size,
+        postgres_get_views,
+        postgres_get_functions,
+        postgres_get_procedures
     ])
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();

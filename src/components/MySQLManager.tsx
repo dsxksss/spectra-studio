@@ -4,6 +4,7 @@ import {
     RefreshCw,
     ChevronRight,
     ChevronLeft,
+    ChevronDown,
     X,
     LogOut,
     Table as TableIcon,
@@ -16,7 +17,10 @@ import {
     Plus,
     Terminal,
     Hash,
-    Trash2
+    Trash2,
+    Database,
+    FolderOpen,
+    Folder
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
@@ -80,12 +84,34 @@ const ConfirmDialog = ({
 };
 
 export default function MySQLManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
-    const [keys, setKeys] = useState<string[]>([]);
+    const [, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
     const [filter, setFilter] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Database switching
+    const SYSTEM_DATABASES = ['information_schema', 'mysql', 'performance_schema', 'sys'];
+    const [databases, setDatabases] = useState<string[]>([]);
+    const [selectedDatabase, setSelectedDatabase] = useState<string | null>(null);
+    const [expandedDatabases, setExpandedDatabases] = useState<Set<string>>(new Set());
+    const [databaseTables, setDatabaseTables] = useState<Record<string, string[]>>({});
+    const [databaseTableSizes, setDatabaseTableSizes] = useState<Record<string, Record<string, number>>>({}); // db -> table -> size
+    const [databaseTotalSizes, setDatabaseTotalSizes] = useState<Record<string, number>>({}); // db -> total size
+    const [databaseViews, setDatabaseViews] = useState<Record<string, string[]>>({});
+    const [databaseFunctions, setDatabaseFunctions] = useState<Record<string, string[]>>({});
+    const [databaseProcedures, setDatabaseProcedures] = useState<Record<string, string[]>>({});
+    const [showSystemDatabases, setShowSystemDatabases] = useState(false);
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set()); // e.g. "test:tables", "test:views"
+
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
 
     // View Switching
     const [activeView, setActiveView] = useState<'browser' | 'console' | 'create-table'>('browser');
@@ -286,6 +312,123 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
     };
 
 
+    const fetchDatabases = async () => {
+        try {
+            const result = await invoke<[string, number][]>('mysql_get_databases');
+            const dbs = result.map(([name]) => name).sort();
+
+            const sizes: Record<string, number> = {};
+            result.forEach(([name, size]) => { sizes[name] = size; });
+            setDatabaseTotalSizes(sizes);
+
+            setDatabases(dbs);
+            // Auto-expand the connected database
+            if (dbs.length > 0 && !selectedDatabase) {
+                // Get the current database from connection
+                const currentDb = connectionName?.split('@')[0] || dbs[0];
+                const activeDb = dbs.includes(currentDb) ? currentDb : dbs[0];
+                setSelectedDatabase(activeDb);
+                setExpandedDatabases(new Set([activeDb]));
+                // Fetch tables for the current database
+                const tables = await invoke<string[]>('mysql_get_tables');
+                setDatabaseTables(prev => ({ ...prev, [activeDb]: tables.sort() }));
+                setKeys(tables.sort());
+            }
+        } catch (err: any) {
+            console.error("Failed to fetch databases", err);
+        }
+    };
+
+    // Fetch all schema objects for a specific database - switches to that database
+    const fetchSchemaForDatabase = async (db: string) => {
+        try {
+            await invoke('mysql_use_database', { database: db });
+            setSelectedDatabase(db);
+
+            // Fetch tables with size
+            const tablesWithSize = await invoke<[string, number][]>('mysql_get_tables_with_size', { database: db });
+            const tableNames = tablesWithSize.map(([name]) => name).sort();
+
+            const sizeMap: Record<string, number> = {};
+            tablesWithSize.forEach(([name, size]) => {
+                sizeMap[name] = size;
+            });
+
+            setDatabaseTables(prev => ({ ...prev, [db]: tableNames }));
+            setDatabaseTableSizes(prev => ({ ...prev, [db]: sizeMap }));
+            setKeys(tableNames);
+
+            // Fetch views
+            try {
+                const views = await invoke<string[]>('mysql_get_views');
+                setDatabaseViews(prev => ({ ...prev, [db]: views.sort() }));
+            } catch { setDatabaseViews(prev => ({ ...prev, [db]: [] })); }
+
+            // Fetch functions
+            try {
+                const functions = await invoke<string[]>('mysql_get_functions');
+                setDatabaseFunctions(prev => ({ ...prev, [db]: functions.sort() }));
+            } catch { setDatabaseFunctions(prev => ({ ...prev, [db]: [] })); }
+
+            // Fetch procedures
+            try {
+                const procedures = await invoke<string[]>('mysql_get_procedures');
+                setDatabaseProcedures(prev => ({ ...prev, [db]: procedures.sort() }));
+            } catch { setDatabaseProcedures(prev => ({ ...prev, [db]: [] })); }
+
+            // Auto-expand Tables folder
+            setExpandedFolders(prev => new Set([...prev, `${db}:tables`]));
+        } catch (err: any) {
+            console.error(`Failed to fetch schema for ${db}`, err);
+            showToast(`Failed to load schema for ${db}`, 'error');
+        }
+    };
+
+    // Toggle folder expansion (e.g. "test:tables", "test:views")
+    const toggleFolder = (folderId: string) => {
+        setExpandedFolders(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(folderId)) {
+                newSet.delete(folderId);
+            } else {
+                newSet.add(folderId);
+            }
+            return newSet;
+        });
+    };
+
+    // Handle clicking on a table - switch database if needed, then select table
+    const handleSelectTable = async (db: string, table: string) => {
+        if (selectedDatabase !== db) {
+            try {
+                await invoke('mysql_use_database', { database: db });
+                setSelectedDatabase(db);
+                setKeys(databaseTables[db] || []);
+            } catch (err: any) {
+                showToast(err, 'error');
+                return;
+            }
+        }
+        setSelectedKey(table);
+        setActiveView('browser');
+    };
+
+    const toggleDatabaseExpand = async (db: string) => {
+        const newSet = new Set(expandedDatabases);
+        if (newSet.has(db)) {
+            newSet.delete(db);
+        } else {
+            newSet.add(db);
+            // Fetch schema for this database if not already fetched
+            if (!databaseTables[db]) {
+                setIsLoading(true);
+                await fetchSchemaForDatabase(db);
+                setIsLoading(false);
+            }
+        }
+        setExpandedDatabases(newSet);
+    };
+
     const fetchKeys = async () => {
         setIsLoading(true);
         setError(null);
@@ -341,6 +484,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
     };
 
     useEffect(() => {
+        fetchDatabases();
         fetchKeys();
     }, []);
 
@@ -1088,48 +1232,238 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                     </div>
                 )}
 
-                {/* Table List */}
+                {/* Database Tree List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                    {keys.length === 0 && !isLoading ? (
+                    {databases.length === 0 && !isLoading ? (
                         <div className="flex flex-col items-center justify-center h-48 opacity-60">
-                            <span className="text-sm text-gray-500 mb-3">No tables found</span>
+                            <span className="text-sm text-gray-500 mb-3">No databases found</span>
                         </div>
                     ) : (
-                        keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
-                            <div
-                                key={key}
-                                className={`group w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left transition-all ${selectedKey === key && activeView === 'browser'
-                                    ? 'bg-orange-500/10 text-orange-400 font-medium border border-orange-500/20'
-                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
-                                    }`}
-                            >
-                                <button
-                                    onClick={() => { setSelectedKey(key); setActiveView('browser'); }}
-                                    className="flex-1 flex items-center gap-3 min-w-0"
-                                >
-                                    <TableIcon size={14} className="opacity-70 shrink-0" />
-                                    <span className="truncate">{key}</span>
-                                </button>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <>
+                            {/* User Databases */}
+                            {databases
+                                .filter(db => !SYSTEM_DATABASES.includes(db.toLowerCase()))
+                                .filter(db => {
+                                    const dbTables = databaseTables[db] || [];
+                                    return db.toLowerCase().includes(filter.toLowerCase()) ||
+                                        (expandedDatabases.has(db) && dbTables.some(k => k.toLowerCase().includes(filter.toLowerCase())));
+                                })
+                                .map(db => {
+                                    const dbTables = databaseTables[db] || [];
+                                    const dbViews = databaseViews[db] || [];
+                                    const dbFuncs = databaseFunctions[db] || [];
+                                    const dbProcs = databaseProcedures[db] || [];
+
+                                    return (
+                                        <div key={db} className="mb-1">
+                                            {/* Database Node */}
+                                            <button
+                                                onClick={() => toggleDatabaseExpand(db)}
+                                                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-all ${selectedDatabase === db
+                                                    ? 'bg-orange-500/10 text-orange-400'
+                                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    }`}
+                                            >
+                                                {expandedDatabases.has(db) ? (
+                                                    <ChevronDown size={14} className="shrink-0 opacity-50" />
+                                                ) : (
+                                                    <ChevronRight size={14} className="shrink-0 opacity-50" />
+                                                )}
+                                                <Database size={14} className="shrink-0 opacity-70" />
+                                                <span className="truncate flex-1">{db}</span>
+                                                {databaseTotalSizes[db] !== undefined && (
+                                                    <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap shrink-0 mr-2 opacity-70">
+                                                        {formatBytes(databaseTotalSizes[db])}
+                                                    </span>
+                                                )}
+                                                {selectedDatabase === db && (
+                                                    <span className="text-[10px] bg-orange-500/20 px-1.5 py-0.5 rounded text-orange-400">active</span>
+                                                )}
+                                            </button>
+
+                                            {/* Schema folders under this database */}
+                                            {expandedDatabases.has(db) && (
+                                                <div className="ml-4 mt-1 border-l border-white/5 pl-2">
+                                                    {/* Tables folder */}
+                                                    <button
+                                                        onClick={() => toggleFolder(`${db}:tables`)}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has(`${db}:tables`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        {dbTables.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
+                                                        <span>Tables ({dbTables.length})</span>
+                                                    </button>
+                                                    {expandedFolders.has(`${db}:tables`) && dbTables.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(table => (
+                                                        <div
+                                                            key={table}
+                                                            className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === table && selectedDatabase === db && activeView === 'browser'
+                                                                ? 'bg-orange-500/10 text-orange-400 font-medium'
+                                                                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                                }`}
+                                                        >
+                                                            <button onClick={() => handleSelectTable(db, table)} className="flex-1 flex items-center gap-2 min-w-0">
+                                                                <TableIcon size={12} className="opacity-70 shrink-0" />
+                                                                <span className="truncate" title={table}>{table}</span>
+                                                                {databaseTableSizes[db]?.[table] !== undefined && (
+                                                                    <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
+                                                                        {formatBytes(databaseTableSizes[db][table])}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleSelectTable(db, table).then(() => handleDropTable(table)); }}
+                                                                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                                                title="Drop Table"
+                                                            >
+                                                                <Trash2 size={10} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Views folder */}
+                                                    <button
+                                                        onClick={() => toggleFolder(`${db}:views`)}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has(`${db}:views`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Eye size={12} />
+                                                        <span>Views ({dbViews.length})</span>
+                                                    </button>
+                                                    {expandedFolders.has(`${db}:views`) && dbViews.map(view => (
+                                                        <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                            <Eye size={12} className="opacity-50" />
+                                                            <span className="truncate">{view}</span>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Functions folder */}
+                                                    <button
+                                                        onClick={() => toggleFolder(`${db}:functions`)}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has(`${db}:functions`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Hash size={12} />
+                                                        <span>Functions ({dbFuncs.length})</span>
+                                                    </button>
+                                                    {expandedFolders.has(`${db}:functions`) && dbFuncs.map(func => (
+                                                        <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                            <Hash size={12} className="opacity-50" />
+                                                            <span className="truncate">{func}</span>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Procedures folder */}
+                                                    <button
+                                                        onClick={() => toggleFolder(`${db}:procedures`)}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has(`${db}:procedures`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Terminal size={12} />
+                                                        <span>Procedures ({dbProcs.length})</span>
+                                                    </button>
+                                                    {expandedFolders.has(`${db}:procedures`) && dbProcs.map(proc => (
+                                                        <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                            <Terminal size={12} className="opacity-50" />
+                                                            <span className="truncate">{proc}</span>
+                                                        </div>
+                                                    ))}
+
+                                                    {isLoading && !databaseTables[db] && (
+                                                        <div className="ml-2 px-3 py-2 text-xs text-gray-600 italic">Loading...</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+
+                            {/* System Databases Folder */}
+                            {showSystemDatabases && databases.some(db => SYSTEM_DATABASES.includes(db.toLowerCase())) && (
+                                <div className="mt-4 pt-3 border-t border-white/5">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
-                                        className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-colors"
-                                        title="Drop Table"
+                                        onClick={() => toggleFolder('__system__')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:text-gray-400 transition-colors"
                                     >
-                                        <Trash2 size={12} />
+                                        {expandedFolders.has('__system__') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                        <Folder size={12} />
+                                        <span>System Databases ({databases.filter(db => SYSTEM_DATABASES.includes(db.toLowerCase())).length})</span>
                                     </button>
-                                    {selectedKey === key && <ChevronRight size={14} className="opacity-50" />}
+
+                                    {expandedFolders.has('__system__') && databases
+                                        .filter(db => SYSTEM_DATABASES.includes(db.toLowerCase()))
+                                        .map(db => {
+                                            const dbTables = databaseTables[db] || [];
+
+                                            return (
+                                                <div key={db} className="ml-4">
+                                                    <button
+                                                        onClick={() => toggleDatabaseExpand(db)}
+                                                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-left transition-all ${selectedDatabase === db
+                                                            ? 'bg-orange-500/10 text-orange-400'
+                                                            : 'text-gray-500 hover:bg-white/5 hover:text-gray-400'
+                                                            }`}
+                                                    >
+                                                        {expandedDatabases.has(db) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Database size={12} className="opacity-50" />
+                                                        <span className="truncate flex-1">{db}</span>
+                                                        {databaseTotalSizes[db] !== undefined && (
+                                                            <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap shrink-0 mr-1 opacity-70">
+                                                                {formatBytes(databaseTotalSizes[db])}
+                                                            </span>
+                                                        )}
+                                                        {selectedDatabase === db && (
+                                                            <span className="text-[10px] bg-orange-500/20 px-1 py-0.5 rounded text-orange-400">active</span>
+                                                        )}
+                                                    </button>
+
+                                                    {expandedDatabases.has(db) && (
+                                                        <div className="ml-4 mt-1 border-l border-white/5 pl-2">
+                                                            <button
+                                                                onClick={() => toggleFolder(`${db}:tables`)}
+                                                                className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-gray-600 hover:text-gray-500"
+                                                            >
+                                                                {expandedFolders.has(`${db}:tables`) ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                                                <span>Tables ({dbTables.length})</span>
+                                                            </button>
+                                                            {expandedFolders.has(`${db}:tables`) && dbTables.slice(0, 20).map(table => (
+                                                                <div key={table} className="flex items-center gap-2 px-3 py-1 ml-3 text-[11px] text-gray-600 hover:text-gray-500 cursor-pointer" onClick={() => handleSelectTable(db, table)}>
+                                                                    <TableIcon size={10} className="opacity-50" />
+                                                                    <span className="truncate flex-1" title={table}>{table}</span>
+                                                                    {databaseTableSizes[db]?.[table] !== undefined && (
+                                                                        <span className="text-[9px] text-gray-500 font-mono opacity-70 whitespace-nowrap shrink-0">
+                                                                            {formatBytes(databaseTableSizes[db][table])}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                            {dbTables.length > 20 && expandedFolders.has(`${db}:tables`) && (
+                                                                <div className="px-3 py-1 ml-3 text-[10px] text-gray-600 italic">+{dbTables.length - 20} more...</div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                 </div>
-                            </div>
-                        ))
+                            )}
+                        </>
                     )}
                 </div>
 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
-                    <span>{keys.length} Tables</span>
                     <div className="flex items-center gap-2">
-                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
+                        <span>{databases.filter(db => db === selectedDatabase || showSystemDatabases || !SYSTEM_DATABASES.includes(db.toLowerCase())).length} Databases · {Object.values(databaseTables).reduce((sum, tables) => sum + tables.length, 0)} Tables</span>
+                        <button
+                            onClick={() => setShowSystemDatabases(!showSystemDatabases)}
+                            className={`text-[10px] px-2 py-0.5 rounded transition-colors ${showSystemDatabases ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-gray-500 hover:text-gray-400'}`}
+                            title={showSystemDatabases ? "Hide system databases" : "Show system databases"}
+                        >
+                            {showSystemDatabases ? 'sys ✓' : 'sys'}
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => { fetchDatabases(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
                             <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
                         </button>
                         <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
