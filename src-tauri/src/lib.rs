@@ -216,6 +216,35 @@ fn update_click_region(window: tauri::Window, width: f64, height: f64, _align_x:
 }
 
 #[tauri::command]
+fn get_screen_work_area_for_webview(window: &tauri::WebviewWindow) -> (i32, i32, i32, i32) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(hwnd) = window.hwnd() {
+            unsafe {
+                let hmonitor = MonitorFromWindow(HWND(hwnd.0 as _), MONITOR_DEFAULTTONEAREST);
+                let mut mi = MONITORINFO {
+                    cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                    ..Default::default()
+                };
+                if GetMonitorInfoW(hmonitor, &mut mi).as_bool() {
+                    let r = mi.rcWork;
+                    return (r.left, r.top, r.right - r.left, r.bottom - r.top);
+                }
+            }
+        }
+    }
+    
+    // Fallback
+    if let Ok(Some(m)) = window.current_monitor() {
+        let size = m.size();
+        let pos = m.position();
+        (pos.x, pos.y, size.width as i32, size.height as i32)
+    } else {
+        (0, 0, 800, 600)
+    }
+}
+
+#[tauri::command]
 fn get_screen_work_area(window: tauri::Window) -> (i32, i32, i32, i32) {
     #[cfg(target_os = "windows")]
     {
@@ -1584,9 +1613,26 @@ pub fn run() {
     .setup(|app| {
         let window = app.get_webview_window("main").unwrap();
 
-        // Window size and position are now handled by tauri.conf.json
-        // or other means as requested by the user.
-        // We will remove the explicit full-screen sizing here.
+        // Initialize window size and position for floating widget
+        // Set to toolbar size (365x56) and position at bottom-right corner
+        let toolbar_width: u32 = 365;
+        let toolbar_height: u32 = 56;
+        let margin: i32 = 20; // Margin from screen edge
+        
+        // Get work area (excluding taskbar) 
+        let work_area = get_screen_work_area_for_webview(&window);
+        let (wa_x, wa_y, wa_w, wa_h) = work_area;
+        
+        // Calculate position for bottom-right corner of work area
+        let x = wa_x + wa_w - toolbar_width as i32 - margin;
+        let y = wa_y + wa_h - toolbar_height as i32 - margin;
+        
+        // Set initial size and position
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+            width: toolbar_width,
+            height: toolbar_height,
+        }));
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
 
         #[cfg(target_os = "windows")]
         {

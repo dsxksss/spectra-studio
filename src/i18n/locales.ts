@@ -142,7 +142,37 @@ export const resources = {
             delete_row_redis_msg: "Are you sure you want to delete this specific row? This change will be applied to the Redis value immediately.",
             confirm_update_title: "Confirm Update",
             save_changes_key_msg: "Save {{count}} change(s) for key {{key}}?",
-            overwrite_redis_msg: "This will overwrite the current value in Redis."
+            overwrite_redis_msg: "This will overwrite the current value in Redis.",
+            row_deleted_success: "Row deleted successfully",
+            table_dropped_success: "Table \"{{tableName}}\" dropped",
+            rows_inserted_success: "Successfully inserted {{count}} rows.",
+            changes_saved_success: "Successfully saved {{count}} changes.",
+            query_executed_success: "Query executed successfully",
+            table_created_success: "Table \"{{tableName}}\" created",
+            no_changes_to_save: "No actual changes to save.",
+            update_failed: "Some updates failed. Check console.",
+            batch_update_failed: "Batch update failed",
+
+            // Theme Settings
+            theme_settings: "Theme Settings",
+            theme_mode: "Theme Mode",
+            theme_mode_auto: "Auto",
+            theme_mode_preset: "Preset",
+            theme_mode_custom: "Custom",
+            auto_follow_database: "Auto-follow Database Color",
+            auto_follow_database_desc: "Automatically change background color based on connected database type",
+            select_preset_color: "Select Preset Color",
+            custom_color: "Custom Color",
+            enter_hex_color: "Enter hex color (e.g. #3b82f6)",
+            theme_preview: "Preview",
+            default_blue: "Default Blue",
+            midnight: "Midnight",
+            ocean: "Ocean",
+            forest: "Forest",
+            sunset: "Sunset",
+            purple_rain: "Purple Rain",
+            rose: "Rose",
+            slate: "Slate"
         }
     },
     zh: {
@@ -288,7 +318,37 @@ export const resources = {
             delete_row_redis_msg: "确定要删除这一行吗？此更改将立即应用于 Redis 值。",
             confirm_update_title: "确认更新",
             save_changes_key_msg: "保存键 {{key}} 的 {{count}} 个更改吗？",
-            overwrite_redis_msg: "这将覆盖 Redis 中的当前值。"
+            overwrite_redis_msg: "这将覆盖 Redis 中的当前值。",
+            row_deleted_success: "行删除成功",
+            table_dropped_success: "表 \"{{tableName}}\" 已删除",
+            rows_inserted_success: "成功插入 {{count}} 行。",
+            changes_saved_success: "成功保存 {{count}} 个更改。",
+            query_executed_success: "查询执行成功",
+            table_created_success: "表 \"{{tableName}}\" 创建成功",
+            no_changes_to_save: "没有实际更改需要保存。",
+            update_failed: "部分更新失败，请检查控制台。",
+            batch_update_failed: "批量更新失败",
+
+            // Theme Settings
+            theme_settings: "主题设置",
+            theme_mode: "主题模式",
+            theme_mode_auto: "自动",
+            theme_mode_preset: "预设",
+            theme_mode_custom: "自定义",
+            auto_follow_database: "跟随数据库主题色",
+            auto_follow_database_desc: "根据连接的数据库类型自动更改背景颜色",
+            select_preset_color: "选择预设颜色",
+            custom_color: "自定义颜色",
+            enter_hex_color: "输入十六进制颜色 (例如 #3b82f6)",
+            theme_preview: "预览",
+            default_blue: "默认蓝",
+            midnight: "午夜",
+            ocean: "海洋",
+            forest: "森林",
+            sunset: "日落",
+            purple_rain: "紫雨",
+            rose: "玫瑰",
+            slate: "石板灰"
         }
     }
 };

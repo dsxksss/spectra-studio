@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, X } from 'lucide-react';
+import { useTranslation } from '../i18n/I18nContext';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -14,6 +15,8 @@ interface ToastProps {
 }
 
 export const Toast: React.FC<ToastProps> = ({ message, type, isVisible, onClose, duration = 3000 }) => {
+    const { t } = useTranslation();
+
     useEffect(() => {
         if (isVisible) {
             const timer = setTimeout(() => {
@@ -29,11 +32,11 @@ export const Toast: React.FC<ToastProps> = ({ message, type, isVisible, onClose,
         <AnimatePresence>
             {isVisible && (
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
-                    animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }}
-                    exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
+                    initial={{ opacity: 0, scale: 0.9, y: -20, x: "-50%" }}
+                    animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
+                    exit={{ opacity: 0, scale: 0.9, y: -20, x: "-50%" }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className="fixed top-1/2 left-1/2 z-[9999] flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#18181b]/90 backdrop-blur-xl border border-white/10 shadow-2xl min-w-[300px]"
+                    className="fixed top-6 left-1/2 z-[9999] flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#18181b]/90 backdrop-blur-xl border border-white/10 shadow-2xl min-w-[300px]"
                 >
                     {type === 'success' && <CheckCircle2 className="text-green-500" size={20} />}
                     {type === 'error' && <XCircle className="text-red-500" size={20} />}
@@ -41,7 +44,7 @@ export const Toast: React.FC<ToastProps> = ({ message, type, isVisible, onClose,
 
                     <span className="flex-1 text-sm font-medium text-white">{message}</span>
 
-                    <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+                    <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors" title={t('close')}>
                         <X size={14} className="text-gray-500 hover:text-white" />
                     </button>
 

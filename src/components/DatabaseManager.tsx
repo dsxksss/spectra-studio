@@ -15,6 +15,8 @@ import {
     RefreshCw,
     Pencil,
     Trash2,
+    Palette,
+    Check,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
@@ -192,9 +194,18 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
 );
 
 import { useTranslation } from '../i18n/I18nContext';
+import { useTheme, PRESET_THEME_COLORS, ThemeMode } from '../contexts/ThemeContext';
 
 export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string, config?: any) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
     const { t, language, setLanguage } = useTranslation();
+    const {
+        themeSettings,
+        currentThemeColor,
+        setThemeMode,
+        setAutoFollowDatabase,
+        setPresetColor,
+        setCustomColor
+    } = useTheme();
     const [selectedService, setSelectedService] = useState(activeService || 'PostgreSQL');
     const [showPassword, setShowPassword] = useState(false);
 
@@ -914,7 +925,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    className="w-full max-w-md bg-[#121214] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden"
+                                    className="w-full max-w-xl bg-[#121214] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden max-h-[80vh] flex flex-col"
                                 >
                                     <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#18181b]">
                                         <h3 className="font-bold text-gray-200 flex items-center gap-2">
@@ -926,7 +937,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                         </button>
                                     </div>
 
-                                    <div className="p-6 space-y-6">
+                                    <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                                        {/* Language Section */}
                                         <div className="space-y-4">
                                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">{t('language')}</h4>
                                             <div className="w-full">
@@ -934,6 +946,149 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                             </div>
                                         </div>
 
+                                        {/* Theme Settings Section */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2 flex items-center gap-2">
+                                                <Palette size={14} />
+                                                {t('theme_settings')}
+                                            </h4>
+
+                                            {/* Theme Preview */}
+                                            <div className="flex items-center gap-4">
+                                                <div
+                                                    className="w-16 h-16 rounded-xl shadow-lg border border-white/10 relative overflow-hidden"
+                                                    style={{ backgroundColor: currentThemeColor }}
+                                                >
+                                                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-gray-300 font-medium">{t('theme_preview')}</p>
+                                                    <p className="text-xs text-gray-500 font-mono">{currentThemeColor}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Theme Mode Selector */}
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-gray-400">{t('theme_mode')}</label>
+                                                <div className="flex gap-2">
+                                                    {(['auto', 'preset', 'custom'] as ThemeMode[]).map((mode) => (
+                                                        <button
+                                                            key={mode}
+                                                            onClick={() => setThemeMode(mode)}
+                                                            className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${themeSettings.mode === mode
+                                                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                                    : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-white'
+                                                                }`}
+                                                        >
+                                                            {t(`theme_mode_${mode}`)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Auto Mode Options */}
+                                            {themeSettings.mode === 'auto' && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    className="space-y-3 bg-white/5 rounded-xl p-4 border border-white/5"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="text-sm text-gray-300">{t('auto_follow_database')}</p>
+                                                            <p className="text-xs text-gray-500 mt-1">{t('auto_follow_database_desc')}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setAutoFollowDatabase(!themeSettings.autoFollowDatabase)}
+                                                            className={`relative w-12 h-7 rounded-full transition-colors ${themeSettings.autoFollowDatabase
+                                                                    ? 'bg-blue-500'
+                                                                    : 'bg-white/10'
+                                                                }`}
+                                                        >
+                                                            <div
+                                                                className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all ${themeSettings.autoFollowDatabase ? 'left-6' : 'left-1'
+                                                                    }`}
+                                                            />
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+
+                                            {/* Preset Colors */}
+                                            {themeSettings.mode === 'preset' && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    className="space-y-3"
+                                                >
+                                                    <label className="text-sm text-gray-400">{t('select_preset_color')}</label>
+                                                    <div className="grid grid-cols-4 gap-3">
+                                                        {PRESET_THEME_COLORS.map((preset) => (
+                                                            <button
+                                                                key={preset.id}
+                                                                onClick={() => setPresetColor(preset.id)}
+                                                                className={`relative group p-3 rounded-xl border transition-all ${themeSettings.presetColorId === preset.id
+                                                                        ? 'border-blue-500/50 bg-blue-500/10'
+                                                                        : 'border-white/5 hover:border-white/20 bg-white/5'
+                                                                    }`}
+                                                            >
+                                                                <div
+                                                                    className="w-full aspect-square rounded-lg shadow-lg mb-2"
+                                                                    style={{ backgroundColor: preset.color }}
+                                                                />
+                                                                <p className="text-[10px] text-gray-400 truncate text-center">{preset.name}</p>
+                                                                {themeSettings.presetColorId === preset.id && (
+                                                                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                                                        <Check size={10} className="text-white" />
+                                                                    </div>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+
+                                            {/* Custom Color */}
+                                            {themeSettings.mode === 'custom' && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    className="space-y-3"
+                                                >
+                                                    <label className="text-sm text-gray-400">{t('custom_color')}</label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative">
+                                                            <input
+                                                                type="color"
+                                                                value={themeSettings.customColor}
+                                                                onChange={(e) => setCustomColor(e.target.value)}
+                                                                className="w-14 h-14 rounded-xl cursor-pointer border-2 border-white/10 bg-transparent"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <input
+                                                                type="text"
+                                                                value={themeSettings.customColor}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
+                                                                        setCustomColor(val);
+                                                                    }
+                                                                }}
+                                                                placeholder={t('enter_hex_color')}
+                                                                className="w-full h-11 bg-[#18181b] border border-white/10 rounded-xl px-4 text-gray-200 font-mono text-sm focus:outline-none focus:border-blue-500/50 transition-all"
+                                                            />
+                                                            <p className="text-[10px] text-gray-500 mt-1.5">{t('enter_hex_color')}</p>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </div>
+
+                                        {/* Connection Settings */}
                                         <div className="space-y-4">
                                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">{t('settings')}</h4>
 

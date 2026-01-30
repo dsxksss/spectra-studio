@@ -1527,19 +1527,15 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                         </button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => { fetchDatabases(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title={t('reload')}>
-                            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-                        </button>
-                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title={t('disconnect')}>
-                            <LogOut size={14} />
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-2" title={t('disconnect')}>
+                            <LogOut size={18} />
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Main Content Area */}
             <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
-                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
+                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0 pr-[130px]" onPointerDown={onDragStart}>
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
@@ -1590,18 +1586,34 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                     <div className="flex items-center gap-3">
                         {/* View/Edit Toggle */}
                         {activeView === 'browser' && selectedKey && (
-                            <div className="flex items-center gap-2 bg-[#18181b] rounded-lg p-1 border border-white/10 mr-2">
+                            <div className="flex items-center p-0.5 bg-[#18181b]/50 rounded-lg border border-white/5 relative isolate mr-2">
                                 <button
                                     onClick={requestOutMode}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'view' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Eye size={12} /> {t('views')}
+                                    {mode === 'view' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorMySQL"
+                                            className="absolute inset-0 bg-orange-500/20 border border-orange-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Eye size={12} />
+                                    {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'edit' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'edit' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Pencil size={12} /> {t('edit')}
+                                    {mode === 'edit' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorMySQL"
+                                            className="absolute inset-0 bg-amber-500/20 border border-amber-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Pencil size={12} />
+                                    {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1640,9 +1652,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                                 <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
                             </button>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors" title="Close Window">
-                            <X size={18} />
-                        </button>
+
                     </div>
                 </div>
 

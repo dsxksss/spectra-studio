@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
 import {
     Search,
     RefreshCw,
@@ -922,12 +923,9 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                 {/* Footer Actions */}
                 <div className="p-3 border-t border-white/5 flex items-center justify-between text-xs bg-[#0c0c0e]/50">
                     <span className="text-gray-500 font-mono">{keys.length} {t('keys')}</span>
-                    <div className="flex items-center gap-1">
-                        <button onClick={fetchKeys} className="p-1.5 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors" title={t('reload')}>
-                            <RefreshCw size={14} />
-                        </button>
-                        <button onClick={onDisconnect} className="p-1.5 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors" title={t('disconnect')}>
-                            <LogOut size={14} />
+                    <div className="flex items-center gap-2">
+                        <button onClick={onDisconnect} className="p-2 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors text-gray-500" title={t('disconnect')}>
+                            <LogOut size={18} />
                         </button>
                     </div>
                 </div>
@@ -936,7 +934,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
             {/* Main Content */}
             <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden backdrop-blur-md">
                 {/* Header */}
-                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
+                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0 pr-[130px]" onPointerDown={onDragStart}>
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
@@ -1011,24 +1009,38 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                         )}
 
                         {selectedKey && (
-                            <div className="flex bg-[#18181b] rounded-lg p-1 border border-white/10">
+                            <div className="flex items-center p-0.5 bg-[#18181b]/50 rounded-lg border border-white/5 relative isolate">
                                 <button
                                     onClick={() => { setMode('view'); setPendingChanges({}); }}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'view' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'view' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Eye size={14} /> {t('views')}
+                                    {mode === 'view' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorRedis"
+                                            className="absolute inset-0 bg-blue-500/20 border border-blue-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Eye size={12} />
+                                    {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'edit' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-300'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'edit' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Pencil size={14} /> {t('edit')}
+                                    {mode === 'edit' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorRedis"
+                                            className="absolute inset-0 bg-indigo-500/20 border border-indigo-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Pencil size={12} />
+                                    {t('edit')}
                                 </button>
                             </div>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors">
-                            <X size={18} />
-                        </button>
+
                     </div>
                 </div>
 

@@ -1,7 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
     X,
-    Minus,
     GripVertical,
     Maximize2,
     Minimize2
@@ -39,9 +38,11 @@ const UI_SIZES = {
 const ANIMATION_DURATION = 300;
 
 import { useTranslation } from '../i18n/I18nContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function FloatingApp() {
     const { t } = useTranslation();
+    const { currentThemeColor, setConnectedDatabase } = useTheme();
     const [viewMode, setViewMode] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [connectedService, setConnectedService] = useState<string | null>(null);
     const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
@@ -49,6 +50,11 @@ export default function FloatingApp() {
     const [preselectedService, setPreselectedService] = useState<string | null>(null);
     const [visibleContent, setVisibleContent] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [contentOpacity, setContentOpacity] = useState(1);
+
+    // Sync connected service with theme context
+    useEffect(() => {
+        setConnectedDatabase(connectedService);
+    }, [connectedService, setConnectedDatabase]);
 
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
@@ -60,6 +66,35 @@ export default function FloatingApp() {
 
     const [isMaximized, setIsMaximized] = useState(false);
     const [showBackground, setShowBackground] = useState(false);
+
+    // Background color transition states
+    const [appliedThemeColor, setAppliedThemeColor] = useState(currentThemeColor);
+    const [bgOpacity, setBgOpacity] = useState(1);
+    const bgTransitionRef = useRef(false);
+
+    // Handle theme color change with fade transition
+    useEffect(() => {
+        if (currentThemeColor !== appliedThemeColor && !bgTransitionRef.current) {
+            bgTransitionRef.current = true;
+
+            // Fade out
+            setBgOpacity(0);
+
+            // After fade out (wait for transition), update color and fade in
+            setTimeout(() => {
+                setAppliedThemeColor(currentThemeColor);
+
+                // Small buffer to ensure render cycle catches the color change
+                requestAnimationFrame(() => {
+                    setBgOpacity(1);
+                    // Reset flag after fade in completes
+                    setTimeout(() => {
+                        bgTransitionRef.current = false;
+                    }, 200);
+                });
+            }, 200);
+        }
+    }, [currentThemeColor, appliedThemeColor]);
 
     const resetToStandardSize = async () => {
         const appWindow = getCurrentWindow();
@@ -267,55 +302,26 @@ export default function FloatingApp() {
                 targetSize.h = targetPhysH / factor;
             }
 
-            // 2. Identify Anchor Point based on CURRENT layout alignment
-            // This is the point that should remain stationary
+            // 2. Calculate Anchor Point based on CURRENT layout alignment
+            // The anchor point is the corner that should remain stationary during resize
+            // For a floating widget at bottom-right, this is the bottom-right corner
             let anchorX = currentOuterPos.x;
             let anchorY = currentOuterPos.y;
 
             if (layoutAlign.x === 'end') {
-                anchorX = currentOuterPos.x + curPhysW;
+                anchorX = currentOuterPos.x + curPhysW; // Right edge
             }
             if (layoutAlign.y === 'end') {
-                anchorY = currentOuterPos.y + curPhysH;
+                anchorY = currentOuterPos.y + curPhysH; // Bottom edge
             }
 
-            // 3. Determine NEW Alignment if Expanding
-            // If we are expanding, we might need to flip alignment if we are too close to screen edges
-            let nextAlignX = layoutAlign.x;
-            let nextAlignY = layoutAlign.y;
-
-            if (targetMode === 'expanded') {
-                const screenMidX = waX + waW / 2;
-                const screenMidY = waY + waH / 2;
-
-                // Center of current window
-                const centerX = currentOuterPos.x + curPhysW / 2;
-                const centerY = currentOuterPos.y + curPhysH / 2;
-
-                nextAlignX = centerX < screenMidX ? 'start' : 'end';
-                nextAlignY = centerY < screenMidY ? 'start' : 'end';
-
-                // If expanding and alignment changes, we effectively pivot around the current 'center' or 'corner' 
-                // closest to the center? 
-                // Creating a smooth transition when flipping alignment is tricky. 
-                // Let's stick to the simplest anchor: The current top-left (if start) or top-right (if end).
-
-                if (nextAlignX === 'start') {
-                    // We want to be Start aligned. Anchor is Top-Left.
-                    anchorX = currentOuterPos.x;
-                } else {
-                    // We want to be End aligned. Anchor is Top-Right (conceptually)
-                    anchorX = currentOuterPos.x + curPhysW;
-                }
-
-                if (nextAlignY === 'start') {
-                    anchorY = currentOuterPos.y;
-                } else {
-                    anchorY = currentOuterPos.y + curPhysH;
-                }
-            }
+            // 3. Keep the original alignment when expanding
+            const nextAlignX = layoutAlign.x;
+            const nextAlignY = layoutAlign.y;
 
             // 4. Calculate Target Window Position (Top-Left)
+            // If aligned to 'end', the window should expand towards the left/top
+            // so we subtract the target size from the anchor point
             let targetWinX = anchorX;
             let targetWinY = anchorY;
 
@@ -325,6 +331,12 @@ export default function FloatingApp() {
             if (nextAlignY === 'end') {
                 targetWinY = anchorY - targetPhysH;
             }
+
+            // Boundary Check: Ensure we don't push off-screen
+            if (targetWinX < waX) targetWinX = waX;
+            if (targetWinY < waY) targetWinY = waY;
+            if (targetWinX + targetPhysW > waX + waW) targetWinX = waX + waW - targetPhysW;
+            if (targetWinY + targetPhysH > waY + waH) targetWinY = waY + waH - targetPhysH;
 
             // 5. Apply Position and Size
             // Set position FIRST to anchor it, then size.
@@ -554,17 +566,18 @@ export default function FloatingApp() {
                 <div
                     className="absolute py-[1px] inset-0 z-0 transition-opacity pointer-events-none overflow-hidden"
                     style={{
-                        opacity: showBackground ? 1 : 0,
+                        opacity: showBackground ? bgOpacity : 0,
                         borderRadius: `${currentUiSize.r}px`,
-                        transitionDelay: showBackground ? '150ms' : '0ms',
-                        transitionDuration: showBackground ? '300ms' : '0ms',
+                        transitionDelay: (showBackground && bgOpacity === 1) ? '150ms' : '0ms',
+                        transitionDuration: showBackground ? '200ms' : '0ms',
                         transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
                     }}
                 >
                     <Silk
+                        key={appliedThemeColor}
                         speed={5}
                         scale={1}
-                        color="#364774ff"
+                        color={appliedThemeColor}
                         noiseIntensity={1.5}
                         rotation={2}
                     />

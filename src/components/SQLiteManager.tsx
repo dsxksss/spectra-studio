@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
 import {
     Search,
     RefreshCw,
@@ -163,7 +164,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
             for (const row of newRows) {
                 await invoke('sqlite_insert_row', { tableName: selectedKey, data: row });
             }
-            showToast(`Successfully inserted ${newRows.length} rows.`, 'success');
+            showToast(t('rows_inserted_success').replace('{{count}}', String(newRows.length)), 'success');
             setNewRows([]);
             if (selectedKey) fetchTableData(selectedKey, page);
         } catch (err: any) {
@@ -191,7 +192,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
             onConfirm: async () => {
                 try {
                     await invoke('sqlite_delete_row', { tableName: selectedKey, pkCol: primaryKey, pkVal: String(pkVal) });
-                    showToast("Row deleted successfully", 'success');
+                    showToast(t('row_deleted_success'), 'success');
                     fetchTableData(selectedKey, page);
                     fetchCount(selectedKey);
                 } catch (err: any) {
@@ -213,7 +214,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
             onConfirm: async () => {
                 try {
                     await invoke('sqlite_drop_table', { tableName });
-                    showToast(`Table "${tableName}" dropped`, 'success');
+                    showToast(t('table_dropped_success').replace('{{tableName}}', tableName), 'success');
                     if (selectedKey === tableName) {
                         setSelectedKey(null);
                     }
@@ -502,7 +503,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
         }
 
         if (updates.length === 0) {
-            showToast("No actual changes to save.", 'info');
+            showToast(t('no_changes_to_save'), 'info');
             setPendingChanges({});
             setEditHistory([]);
             return;
@@ -542,7 +543,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
             const totalRowsAffected = results.reduce((sum, current) => sum + current, 0);
 
             if (totalRowsAffected > 0) {
-                showToast(`Successfully saved ${totalRowsAffected} changes.`, 'success');
+                showToast(t('changes_saved_success').replace('{{count}}', String(totalRowsAffected)), 'success');
 
                 const newData = [...tableData];
                 Object.entries(pendingChanges).forEach(([idxStr, colChanges]) => {
@@ -560,7 +561,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
             setEditHistory([]);
         } catch (err: any) {
             console.error("Batch update failed", err);
-            showToast("Some updates failed. Check console.", 'error');
+            showToast(t('update_failed'), 'error');
         } finally {
             setIsSaving(false);
         }
@@ -615,7 +616,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                 const parsed = JSON.parse(res);
                 if (Array.isArray(parsed)) {
                     setSqlResults(parsed);
-                    showToast("Query executed successfully", 'success');
+                    showToast(t('query_executed_success'), 'success');
                 } else {
                     setSqlResults([]);
                     showToast(res, 'success');
@@ -647,7 +648,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
         setIsCreatingTable(true);
         try {
             await invoke('sqlite_execute_raw', { sql });
-            showToast(`Table "${newTableName}" created`, 'success');
+            showToast(t('table_created_success').replace('{{tableName}}', newTableName), 'success');
             setNewTableName("");
             setNewTableCols([{ name: 'id', type: 'INTEGER', isPk: true, isNullable: false }]);
             setActiveView('browser');
@@ -1140,19 +1141,15 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <span>{keys.length} {t('tables')}</span>
                     <div className="flex items-center gap-2">
-                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title={t('reload')}>
-                            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-                        </button>
-                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title={t('disconnect')}>
-                            <LogOut size={14} />
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-2" title={t('disconnect')}>
+                            <LogOut size={18} />
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Main Content Area */}
             <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
-                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
+                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0 pr-[130px]" onPointerDown={onDragStart}>
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
@@ -1202,18 +1199,34 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
 
                     <div className="flex items-center gap-3">
                         {activeView === 'browser' && selectedKey && (
-                            <div className="flex items-center gap-2 bg-[#18181b] rounded-lg p-1 border border-white/10 mr-2">
+                            <div className="flex items-center p-0.5 bg-[#18181b]/50 rounded-lg border border-white/5 relative isolate mr-2">
                                 <button
                                     onClick={requestOutMode}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-cyan-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'view' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Eye size={12} /> {t('views')}
+                                    {mode === 'view' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorSQLite"
+                                            className="absolute inset-0 bg-cyan-500/20 border border-cyan-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Eye size={12} />
+                                    {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'edit' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'edit' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Pencil size={12} /> {t('edit')}
+                                    {mode === 'edit' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicatorSQLite"
+                                            className="absolute inset-0 bg-amber-500/20 border border-amber-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Pencil size={12} />
+                                    {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1251,9 +1264,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                 <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
                             </button>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors" title="Close Window">
-                            <X size={18} />
-                        </button>
+
                     </div>
                 </div>
 

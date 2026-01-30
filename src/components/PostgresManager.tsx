@@ -379,7 +379,6 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                 console.warn("Failed to fetch additional objects", objErr);
             }
 
-            showToast(`Switched to ${targetDb}`, 'success');
             return true;
 
         } catch (err: any) {
@@ -1539,11 +1538,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                         </button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => { fetchDatabases(); fetchKeys(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title={t('reload')}>
-                            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-                        </button>
-                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title={t('disconnect')}>
-                            <LogOut size={14} />
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-2" title={t('disconnect')}>
+                            <LogOut size={18} />
                         </button>
                     </div>
                 </div>
