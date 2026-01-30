@@ -29,11 +29,11 @@ export const Toast: React.FC<ToastProps> = ({ message, type, isVisible, onClose,
         <AnimatePresence>
             {isVisible && (
                 <motion.div
-                    initial={{ opacity: 0, x: 20, scale: 0.9 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 20, scale: 0.9 }}
+                    initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
+                    animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }}
+                    exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className="fixed top-6 right-6 z-[9999] flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#18181b]/90 backdrop-blur-xl border border-white/10 shadow-2xl min-w-[300px]"
+                    className="fixed top-1/2 left-1/2 z-[9999] flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#18181b]/90 backdrop-blur-xl border border-white/10 shadow-2xl min-w-[300px]"
                 >
                     {type === 'success' && <CheckCircle2 className="text-green-500" size={20} />}
                     {type === 'error' && <XCircle className="text-red-500" size={20} />}

@@ -64,10 +64,19 @@ export default function FloatingApp() {
     const resetToStandardSize = async () => {
         const appWindow = getCurrentWindow();
         const factor = await appWindow.scaleFactor();
-        const targetW = 1200 * factor;
-        const targetH = 800 * factor;
 
-        // Calculate Anchor (Bottom-Right)
+        // Get Work Area for constraints
+        const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+        const [waX, waY, waW, waH] = workArea;
+
+        // Target: 1200x800 or Screen Size (whichever is smaller)
+        const targetPhysicalW = 1200 * factor;
+        const targetPhysicalH = 800 * factor;
+
+        const finalW = Math.min(targetPhysicalW, waW);
+        const finalH = Math.min(targetPhysicalH, waH);
+
+        // Calculate Anchor (Bottom-Right) based on current window
         const outerPos = await appWindow.outerPosition();
         const outerSize = await appWindow.outerSize();
 
@@ -75,19 +84,34 @@ export default function FloatingApp() {
         const brY = outerPos.y + outerSize.height;
 
         // New Top-Left
-        const newX = brX - targetW;
-        const newY = brY - targetH;
+        // If we strictly anchor BR:
+        let newX = brX - finalW;
+        let newY = brY - finalH;
+
+        // Boundary Check: Ensure we don't push off-screen (top/left)
+        // If window was near left edge, resizing width might push x negative relative to Work Area?
+        // Let's ensure newX >= waX and newY >= waY
+        if (newX < waX) newX = waX;
+        if (newY < waY) newY = waY;
+
+        // Also check right/bottom bounds (though size clamping helps)
+        if (newX + finalW > waX + waW) newX = waX + waW - finalW;
+        if (newY + finalH > waY + waH) newY = waY + waH - finalH;
 
         await Promise.all([
             appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
-            appWindow.setSize(new PhysicalSize(Math.round(targetW), Math.round(targetH)))
+            appWindow.setSize(new PhysicalSize(Math.round(finalW), Math.round(finalH)))
         ]);
 
-        setCurrentUiSize({ w: 1200, h: 800, r: UI_SIZES.expanded.r });
+        // Logic UI Size (convert back to Logical for state)
+        const logicalW = finalW / factor;
+        const logicalH = finalH / factor;
+
+        setCurrentUiSize({ w: logicalW, h: logicalH, r: UI_SIZES.expanded.r });
         // Update persistent size
         if (UI_SIZES.expanded) {
-            UI_SIZES.expanded.w = 1200;
-            UI_SIZES.expanded.h = 800;
+            UI_SIZES.expanded.w = logicalW;
+            UI_SIZES.expanded.h = logicalH;
         }
         setIsMaximized(false);
     };
@@ -224,11 +248,24 @@ export default function FloatingApp() {
             const currentSize = UI_SIZES[viewMode];
             const targetSize = UI_SIZES[targetMode];
 
+            const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+            const [waX, waY, waW, waH] = workArea;
+
             // Current Physical Bounds
             const curPhysW = currentSize.w * factor;
             const curPhysH = currentSize.h * factor;
-            const targetPhysW = targetSize.w * factor;
-            const targetPhysH = targetSize.h * factor;
+
+            // Target Physical Bounds (Clamped)
+            let targetPhysW = targetSize.w * factor;
+            let targetPhysH = targetSize.h * factor;
+
+            if (targetMode === 'expanded') {
+                targetPhysW = Math.min(targetPhysW, waW);
+                targetPhysH = Math.min(targetPhysH, waH);
+                // Update logical target size for state
+                targetSize.w = targetPhysW / factor;
+                targetSize.h = targetPhysH / factor;
+            }
 
             // 2. Identify Anchor Point based on CURRENT layout alignment
             // This is the point that should remain stationary
@@ -248,8 +285,6 @@ export default function FloatingApp() {
             let nextAlignY = layoutAlign.y;
 
             if (targetMode === 'expanded') {
-                const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
-                const [waX, waY, waW, waH] = workArea;
                 const screenMidX = waX + waW / 2;
                 const screenMidY = waY + waH / 2;
 
@@ -384,11 +419,14 @@ export default function FloatingApp() {
                                 {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                             </button>
                             <button
-                                onClick={() => getCurrentWindow().close()}
-                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-md transition-colors"
-                                title="Close"
+                                onClick={() => {
+                                    setConnectedService(null);
+                                    handleChangeMode('toolbar');
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                title="Close Panel"
                             >
-                                <Minus size={14} />
+                                <X size={14} />
                             </button>
                         </div>
 
@@ -488,9 +526,7 @@ export default function FloatingApp() {
                         </button >
                         <div className="w-[1px] h-6 bg-white/10 shrink-0" />
                         <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={() => handleChangeMode('collapsed')} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-white transition-colors">
-                                <Minus size={16} />
-                            </button>
+
                             <button onClick={() => getCurrentWindow().close()} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-red-400 transition-colors">
                                 <X size={16} />
                             </button>

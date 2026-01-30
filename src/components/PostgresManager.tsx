@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search,
     RefreshCw,
@@ -1327,93 +1328,151 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                         </button>
 
                                         {/* Schema folders under connected database */}
-                                        {expandedDatabases.has(db) && selectedDatabase === db && (
-                                            <div className="ml-4 mt-1 border-l border-white/5 pl-2">
-                                                {/* Tables folder */}
-                                                <button
-                                                    onClick={() => toggleFolder('tables')}
-                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                        <AnimatePresence>
+                                            {expandedDatabases.has(db) && selectedDatabase === db && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: "auto", opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                                                    className="ml-4 mt-1 border-l border-white/5 pl-2 overflow-hidden"
                                                 >
-                                                    {expandedFolders.has('tables') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                    {keys.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
-                                                    <span>{t('tables')} ({keys.length})</span>
-                                                </button>
-                                                {expandedFolders.has('tables') && keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
-                                                    <div
-                                                        key={key}
-                                                        className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === key && activeView === 'browser'
-                                                            ? 'bg-blue-500/10 text-blue-400 font-medium'
-                                                            : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-                                                            }`}
+                                                    {/* Tables folder */}
+                                                    <motion.button
+                                                        whileHover={{ x: 2 }}
+                                                        onClick={() => toggleFolder('tables')}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
                                                     >
-                                                        <button onClick={() => { setSelectedKey(key); setActiveView('browser'); }} className="flex-1 flex items-center gap-2 min-w-0">
-                                                            <TableIcon size={12} className="opacity-70 shrink-0" />
-                                                            <span className="truncate" title={key}>{key}</span>
-                                                            {tableSizes[key] !== undefined && (
-                                                                <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
-                                                                    {formatBytes(tableSizes[key])}
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
-                                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
-                                                            title={t('delete')}
-                                                        >
-                                                            <Trash2 size={10} />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                                        {expandedFolders.has('tables') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        {keys.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
+                                                        <span>{t('tables')} ({keys.length})</span>
+                                                    </motion.button>
+                                                    <AnimatePresence>
+                                                        {expandedFolders.has('tables') && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                {keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
+                                                                    <motion.div
+                                                                        key={key}
+                                                                        initial={{ x: -10, opacity: 0 }}
+                                                                        animate={{ x: 0, opacity: 1 }}
+                                                                        className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === key && activeView === 'browser'
+                                                                            ? 'bg-blue-500/10 text-blue-400 font-medium'
+                                                                            : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                                            }`}
+                                                                    >
+                                                                        <button onClick={() => { setSelectedKey(key); setActiveView('browser'); }} className="flex-1 flex items-center gap-2 min-w-0">
+                                                                            <TableIcon size={12} className="opacity-70 shrink-0" />
+                                                                            <span className="truncate" title={key}>{key}</span>
+                                                                            {tableSizes[key] !== undefined && (
+                                                                                <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
+                                                                                    {formatBytes(tableSizes[key])}
+                                                                                </span>
+                                                                            )}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
+                                                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                                                            title={t('delete')}
+                                                                        >
+                                                                            <Trash2 size={10} />
+                                                                        </button>
+                                                                    </motion.div>
+                                                                ))}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
 
-                                                {/* Views folder */}
-                                                <button
-                                                    onClick={() => toggleFolder('views')}
-                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                >
-                                                    {expandedFolders.has('views') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                    <Eye size={12} />
-                                                    <span>{t('views')} ({views.length})</span>
-                                                </button>
-                                                {expandedFolders.has('views') && views.map(view => (
-                                                    <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                        <Eye size={12} className="opacity-50" />
-                                                        <span className="truncate">{view}</span>
-                                                    </div>
-                                                ))}
+                                                    {/* Views folder */}
+                                                    <motion.button
+                                                        whileHover={{ x: 2 }}
+                                                        onClick={() => toggleFolder('views')}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has('views') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Eye size={12} />
+                                                        <span>{t('views')} ({views.length})</span>
+                                                    </motion.button>
+                                                    <AnimatePresence>
+                                                        {expandedFolders.has('views') && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                {views.map(view => (
+                                                                    <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                        <Eye size={12} className="opacity-50" />
+                                                                        <span className="truncate">{view}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
 
-                                                {/* Functions folder */}
-                                                <button
-                                                    onClick={() => toggleFolder('functions')}
-                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                >
-                                                    {expandedFolders.has('functions') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                    <Hash size={12} />
-                                                    <span>{t('functions')} ({functions.length})</span>
-                                                </button>
-                                                {expandedFolders.has('functions') && functions.map(func => (
-                                                    <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                        <Hash size={12} className="opacity-50" />
-                                                        <span className="truncate">{func}</span>
-                                                    </div>
-                                                ))}
+                                                    {/* Functions folder */}
+                                                    <motion.button
+                                                        whileHover={{ x: 2 }}
+                                                        onClick={() => toggleFolder('functions')}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has('functions') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Hash size={12} />
+                                                        <span>{t('functions')} ({functions.length})</span>
+                                                    </motion.button>
+                                                    <AnimatePresence>
+                                                        {expandedFolders.has('functions') && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                {functions.map(func => (
+                                                                    <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                        <Hash size={12} className="opacity-50" />
+                                                                        <span className="truncate">{func}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
 
-                                                {/* Procedures folder */}
-                                                <button
-                                                    onClick={() => toggleFolder('procedures')}
-                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                >
-                                                    {expandedFolders.has('procedures') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                    <Terminal size={12} />
-                                                    <span>{t('procedures')} ({procedures.length})</span>
-                                                </button>
-                                                {expandedFolders.has('procedures') && procedures.map(proc => (
-                                                    <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                        <Terminal size={12} className="opacity-50" />
-                                                        <span className="truncate">{proc}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                                    {/* Procedures folder */}
+                                                    <motion.button
+                                                        whileHover={{ x: 2 }}
+                                                        onClick={() => toggleFolder('procedures')}
+                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                    >
+                                                        {expandedFolders.has('procedures') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <Terminal size={12} />
+                                                        <span>{t('procedures')} ({procedures.length})</span>
+                                                    </motion.button>
+                                                    <AnimatePresence>
+                                                        {expandedFolders.has('procedures') && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                {procedures.map(proc => (
+                                                                    <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                        <Terminal size={12} className="opacity-50" />
+                                                                        <span className="truncate">{proc}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
 
                                         {/* Show message for non-connected databases */}
                                         {expandedDatabases.has(db) && selectedDatabase !== db && (
@@ -1492,7 +1551,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col bg-[#09090b]/60 relative overflow-hidden">
-                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0" onPointerDown={onDragStart}>
+                <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#09090b]/50 backdrop-blur-md cursor-move z-10 sticky top-0 pr-[130px]" onPointerDown={onDragStart}>
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
@@ -1541,20 +1600,36 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* View/Edit Toggle */}
+                        {/* Improved View/Edit Toggle */}
                         {activeView === 'browser' && selectedKey && (
-                            <div className="flex items-center gap-2 bg-[#18181b] rounded-lg p-1 border border-white/10 mr-2">
+                            <div className="flex items-center p-0.5 bg-[#18181b]/50 rounded-lg border border-white/5 relative isolate">
                                 <button
                                     onClick={requestOutMode}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'view' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Eye size={12} /> {t('views')}
+                                    {mode === 'view' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicator"
+                                            className="absolute inset-0 bg-blue-500/20 border border-blue-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Eye size={12} />
+                                    {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'edit' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                    className={`relative z-10 px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${mode === 'edit' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Pencil size={12} /> {t('edit')}
+                                    {mode === 'edit' && (
+                                        <motion.div
+                                            layoutId="viewEditIndicator"
+                                            className="absolute inset-0 bg-amber-500/20 border border-amber-500/30 rounded-md -z-10"
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                    <Pencil size={12} />
+                                    {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1593,9 +1668,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                 <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
                             </button>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-colors" title="Close Window">
-                            <X size={18} />
-                        </button>
+
                     </div>
                 </div>
 
