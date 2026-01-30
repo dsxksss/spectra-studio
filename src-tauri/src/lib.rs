@@ -9,11 +9,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Mutex;
 
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, RECT, LPARAM};
+#[cfg(target_os = "windows")]
+use windows::core::BOOL;
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 #[cfg(target_os = "windows")]
-use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST, CreateRectRgn, SetWindowRgn}; // Added imports
+use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTONEAREST, CreateRectRgn, SetWindowRgn, EnumDisplayMonitors, HDC};
 
 use std::time::Duration;
 use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, sqlite::SqlitePoolOptions, MySqlPool, PgPool, SqlitePool};
@@ -259,6 +261,46 @@ fn get_screen_work_area(window: tauri::Window) -> (i32, i32, i32, i32) {
         (pos.x, pos.y, size.width as i32, size.height as i32)
     } else {
         (0, 0, 800, 600)
+    }
+}
+
+#[tauri::command]
+fn get_all_monitors_work_area() -> Vec<(i32, i32, i32, i32)> {
+    #[cfg(target_os = "windows")]
+    {
+        unsafe extern "system" fn monitor_enum_proc(
+            hmonitor: windows::Win32::Graphics::Gdi::HMONITOR,
+            _: HDC,
+            _: *mut RECT,
+            lparam: LPARAM,
+        ) -> BOOL {
+            let monitors = &mut *(lparam.0 as *mut Vec<(i32, i32, i32, i32)>);
+            let mut mi = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            if GetMonitorInfoW(hmonitor, &mut mi).as_bool() {
+                let r = mi.rcWork;
+                monitors.push((r.left, r.top, r.right - r.left, r.bottom - r.top));
+            }
+            BOOL(1)
+        }
+
+        let mut monitors = Vec::new();
+        unsafe {
+            let _ = EnumDisplayMonitors(
+                None,
+                None,
+                Some(monitor_enum_proc),
+                LPARAM(&mut monitors as *mut _ as isize),
+            );
+        }
+        return monitors;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Vec::new()
     }
 }
 
@@ -1501,6 +1543,7 @@ pub fn run() {
         greet,
         update_click_region,
         get_screen_work_area,
+        get_all_monitors_work_area,
         connect_redis, 
         redis_get_keys,
         redis_get_value,
@@ -1624,11 +1667,17 @@ pub fn run() {
                     std::mem::size_of::<i32>() as u32,
                 );
             }
+
+            // 额外尝试设置 Webview 的背景色为透明
+            let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
         }
         
         let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
         let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
         let menu = Menu::with_items(app, &[&show, &quit])?;
+
+        // 显式嵌入图标字节，确保开发和生产环境都能正确加载最新的品牌 Logo
+        let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))?;
 
         let _tray = TrayIconBuilder::new()
             .menu(&menu)
@@ -1660,7 +1709,7 @@ pub fn run() {
                     }
                 }
             })
-            .icon(app.default_window_icon().unwrap().clone())
+            .icon(tray_icon)
             .build(app)?;
 
         window.show().unwrap();

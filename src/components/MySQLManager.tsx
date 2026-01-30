@@ -211,10 +211,10 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
 
         setConfirmState({
             isOpen: true,
-            title: "Delete Row",
-            message: `Are you sure you want to delete this row? This action cannot be undone.\n\n${primaryKey}: ${pkVal}`,
+            title: t('delete_row_title'),
+            message: `${t('delete_row_msg')}\n\n${primaryKey}: ${pkVal}`,
             isDestructive: true,
-            confirmText: "Delete",
+            confirmText: t('delete'),
             onConfirm: async () => {
                 try {
                     await invoke('mysql_delete_row', { tableName: selectedKey, pkCol: primaryKey, pkVal: String(pkVal) });
@@ -233,10 +233,10 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
     const handleDropTable = async (tableName: string) => {
         setConfirmState({
             isOpen: true,
-            title: "Drop Table",
-            message: `CRITICAL: You are about to permanently delete the entire table "${tableName}". All data will be lost forever!`,
+            title: t('drop_table_title'),
+            message: t('drop_table_msg').replace('{{tableName}}', tableName),
             isDestructive: true,
-            confirmText: "DROP TABLE",
+            confirmText: t('drop_table_confirm'),
             onConfirm: async () => {
                 try {
                     await invoke('mysql_drop_table', { tableName });
@@ -825,7 +825,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                     <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#18181b]/50">
                         <div className="flex items-center gap-2 text-xs text-gray-400">
                             <Terminal size={12} />
-                            <span>SQL Editor</span>
+                            <span>{t('sql_editor')}</span>
                         </div>
                         <button
                             onClick={executeSql}
@@ -833,7 +833,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                             className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white rounded-md text-xs font-medium transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20"
                         >
                             {isExecutingSql ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-                            Execute Query
+                            {t('execute_query')}
                         </button>
                     </div>
                     <textarea
@@ -849,7 +849,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                     <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
                         <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
                         <div className="flex flex-col gap-1">
-                            <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Execution Error</span>
+                            <span className="text-xs font-bold text-red-400 uppercase tracking-wider">{t('execution_error')}</span>
                             <p className="text-sm text-red-200 font-mono leading-relaxed">{sqlError}</p>
                         </div>
                     </div>
@@ -858,7 +858,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                 <div className="flex-1 min-h-0 bg-[#121214] border border-white/5 rounded-xl overflow-hidden flex flex-col shadow-inner">
                     <div className="px-4 py-2 border-b border-white/5 bg-[#18181b]/50 flex items-center gap-2 text-xs text-gray-400">
                         <TableIcon size={12} />
-                        <span>Query Results {sqlResults.length > 0 && `(${sqlResults.length} rows)`}</span>
+                        <span>{t('query_results')} {sqlResults.length > 0 && `(${sqlResults.length} ${t('rows')})`}</span>
                     </div>
                     <div className="flex-1 overflow-auto custom-scrollbar p-2">
                         {sqlResults.length > 0 ? (
@@ -886,7 +886,7 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                             </table>
                         ) : (
                             <div className="flex items-center justify-center h-full text-gray-600 italic text-sm">
-                                {isExecutingSql ? "Executing query..." : "Run a SELECT query to see results here"}
+                                {isExecutingSql ? t('executing_query') : t('run_select_desc')}
                             </div>
                         )}
                     </div>
@@ -903,28 +903,28 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                         <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
                             <Plus size={24} />
                         </div>
-                        Create New Table
+                        {t('create_new_table_title')}
                     </h2>
-                    <p className="text-gray-500 text-sm">Define the structure of your new table.</p>
+                    <p className="text-gray-500 text-sm">{t('create_new_table_desc')}</p>
                 </div>
 
                 <div className="bg-[#121214] border border-white/5 rounded-2xl p-6 flex flex-col gap-6 shadow-xl">
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Table Name</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">{t('table_name')}</label>
                         <input
                             type="text"
                             value={newTableName}
                             onChange={(e) => setNewTableName(e.target.value)}
-                            placeholder="e.g. users, products, orders..."
+                            placeholder={t('table_name_placeholder')}
                             className="bg-[#18181b] border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-orange-500/50 transition-all shadow-sm"
                         />
                     </div>
 
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between px-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Columns</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t('columns')}</label>
                             <button onClick={handleAddCol} className="flex items-center gap-2 text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors bg-orange-500/10 px-3 py-1.5 rounded-lg border border-orange-500/20">
-                                <Plus size={14} /> Add Column
+                                <Plus size={14} /> {t('add_column')}
                             </button>
                         </div>
 
@@ -932,17 +932,17 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                             {newTableCols.map((col, idx) => (
                                 <div key={idx} className="flex items-center gap-3 bg-[#18181b] border border-white/5 p-3 rounded-xl animate-in slide-in-from-top-2 duration-200">
                                     <div className="flex-1 flex flex-col gap-1.5">
-                                        <span className="text-[10px] text-gray-600 font-bold uppercase ml-1">Name</span>
+                                        <span className="text-[10px] text-gray-600 font-bold uppercase ml-1">{t('column_name')}</span>
                                         <input
                                             type="text"
                                             value={col.name}
                                             onChange={(e) => handleColChange(idx, 'name', e.target.value)}
-                                            placeholder="Column Name"
+                                            placeholder={t('column_name')}
                                             className="bg-[#09090b] border border-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-orange-500/30 transition-all font-mono"
                                         />
                                     </div>
                                     <div className="w-40 flex flex-col gap-1.5">
-                                        <span className="text-[10px] text-gray-600 font-bold uppercase ml-1">Type</span>
+                                        <span className="text-[10px] text-gray-600 font-bold uppercase ml-1">{t('column_type')}</span>
                                         <select
                                             value={col.type}
                                             onChange={(e) => handleColChange(idx, 'type', e.target.value)}
@@ -961,14 +961,14 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                                     </div>
                                     <div className="flex items-center gap-4 px-2 pt-5">
                                         <label className="flex flex-col items-center gap-1.5 cursor-pointer group">
-                                            <span className="text-[10px] text-gray-600 font-bold uppercase group-hover:text-orange-400 transition-colors">PK</span>
+                                            <span className="text-[10px] text-gray-600 font-bold uppercase group-hover:text-orange-400 transition-colors">{t('pk')}</span>
                                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${col.isPk ? 'bg-orange-500 border-orange-500 text-white' : 'border-white/10 hover:border-white/30'}`}>
                                                 <input type="checkbox" checked={col.isPk} onChange={(e) => handleColChange(idx, 'isPk', e.target.checked)} className="hidden" />
                                                 {col.isPk && <Hash size={12} />}
                                             </div>
                                         </label>
                                         <label className="flex flex-col items-center gap-1.5 cursor-pointer group">
-                                            <span className="text-[10px] text-gray-600 font-bold uppercase group-hover:text-white transition-colors">Null</span>
+                                            <span className="text-[10px] text-gray-600 font-bold uppercase group-hover:text-white transition-colors">{t('null')}</span>
                                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${col.isNullable ? 'bg-white/10 border-white/20 text-white' : 'border-white/10 hover:border-white/30'}`}>
                                                 <input type="checkbox" checked={col.isNullable} onChange={(e) => handleColChange(idx, 'isNullable', e.target.checked)} className="hidden" />
                                                 {col.isNullable && <div className="w-2 h-2 rounded-full bg-white/40" />}
@@ -984,20 +984,21 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                     </div>
 
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-                        <button onClick={() => setActiveView('browser')} className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all">Cancel</button>
+                        <button onClick={() => setActiveView('browser')} className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all">{t('cancel')}</button>
                         <button
                             onClick={handleCreateTable}
                             disabled={isCreatingTable || !newTableName.trim() || newTableCols.some(c => !c.name.trim())}
                             className="px-8 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-xl shadow-orange-500/20 flex items-center gap-3"
                         >
                             {isCreatingTable ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                            Create Table
+                            {t('create_table_button')}
                         </button>
                     </div>
                 </div>
             </div>
         );
     };
+
 
     const renderTable = () => {
         const columns = (tableData as any[]).length > 0

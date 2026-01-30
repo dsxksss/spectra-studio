@@ -5,15 +5,19 @@ import { invoke } from '@tauri-apps/api/core';
 const WIN_MAX_W = 1200;
 const WIN_MAX_H = 800;
 
+interface MonitorArea {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
 interface DragState {
     startX: number;
     startY: number;
     winStartX: number;
     winStartY: number;
-    monitorX: number;
-    monitorY: number;
-    monitorW: number;
-    monitorH: number;
+    allMonitors: MonitorArea[];
     factor: number;
     widgetW: number;
     widgetH: number;
@@ -63,6 +67,76 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         requestAnimationFrame(step);
     }, []);
 
+    // Helper to calculate overshoot across all monitors
+    const calculateOvershoot = (x: number, y: number, w: number, h: number, monitors: MonitorArea[]) => {
+        let minDx = 0;
+        let minDy = 0;
+
+        // Find if we are inside ANY monitor. If yes, no overshoot (simplistic but effective)
+        // More advanced: find the monitor with MOST overlap and calculate overshoot from there, 
+        // but ONLY if the overshoot isn't covered by another monitor.
+
+        const isPointInMonitors = (px: number, py: number) => {
+            return monitors.some(m => px >= m.x && px <= m.x + m.w && py >= m.y && py <= m.y + m.h);
+        };
+
+        const rectsOverlap = (r1: { x: number, y: number, w: number, h: number }, r2: MonitorArea) => {
+            return !(r1.x + r1.w <= r2.x || r1.x >= r2.x + r2.w || r1.y + r1.h <= r2.y || r1.y >= r2.y + r2.h);
+        };
+
+        // If the rectangle overlaps with any monitor, we check edges
+        const overlappingMonitors = monitors.filter(m => rectsOverlap({ x, y, w, h }, m));
+
+        if (overlappingMonitors.length > 0) {
+            // We are at least partially on screen. 
+            // Only dampen if an edge is "out of bounds" and NO monitor covers that direction.
+
+            // Checking Left
+            if (!isPointInMonitors(x, y + h / 2)) {
+                // Find nearest left boundary
+                const nearestLeft = Math.min(...monitors.map(m => m.x));
+                if (x < nearestLeft) minDx = nearestLeft - x;
+            }
+            // Checking Right
+            if (!isPointInMonitors(x + w, y + h / 2)) {
+                const furthestRight = Math.max(...monitors.map(m => m.x + m.w));
+                if (x + w > furthestRight) minDx = furthestRight - (x + w);
+            }
+            // Checking Top
+            if (!isPointInMonitors(x + w / 2, y)) {
+                const nearestTop = Math.min(...monitors.map(m => m.y));
+                if (y < nearestTop) minDy = nearestTop - y;
+            }
+            // Checking Bottom
+            if (!isPointInMonitors(x + w / 2, y + h)) {
+                const furthestBottom = Math.max(...monitors.map(m => m.y + m.h));
+                if (y + h > furthestBottom) minDy = furthestBottom - (y + h);
+            }
+        } else {
+            // Fully off-screen? Snap to nearest monitor.
+            // Find "closest" monitor
+            let closestM = monitors[0];
+            let minDist = Infinity;
+            for (const m of monitors) {
+                const dx = Math.max(m.x - (x + w), 0, x - (m.x + m.w));
+                const dy = Math.max(m.y - (y + h), 0, y - (m.y + m.h));
+                const dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestM = m;
+                }
+            }
+
+            if (x < closestM.x) minDx = closestM.x - x;
+            else if (x + w > closestM.x + closestM.w) minDx = (closestM.x + closestM.w) - (x + w);
+
+            if (y < closestM.y) minDy = closestM.y - y;
+            else if (y + h > closestM.y + closestM.h) minDy = (closestM.y + closestM.h) - (y + h);
+        }
+
+        return { dx: minDx, dy: minDy };
+    };
+
     // The Drag Loop (RAF)
     const updatePosition = useCallback(async () => {
         if (!isDragging.current || !dragState.current) return;
@@ -75,7 +149,7 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
 
         const {
             startX, startY, winStartX, winStartY,
-            monitorX, monitorY, monitorW, monitorH,
+            allMonitors,
             factor, widgetW: currentWidgetW, widgetH: currentWidgetH,
             alignX: dragAlignX, alignY: dragAlignY
         } = dragState.current;
@@ -101,43 +175,24 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const hPhys = currentWidgetH * factor;
 
         let visualLeft = 0;
-        let visualRight = 0;
         let visualTop = 0;
-        let visualBottom = 0;
 
         if (dragAlignX === 'start') {
             visualLeft = newX;
-            visualRight = newX + wPhys;
         } else {
             visualLeft = newX + (winPhysW - wPhys);
-            visualRight = newX + winPhysW;
         }
 
         if (dragAlignY === 'start') {
             visualTop = newY;
-            visualBottom = newY + hPhys;
         } else {
             visualTop = newY + (winPhysH - hPhys);
-            visualBottom = newY + winPhysH;
         }
 
-        // Apply Resistance (Damping)
-        if (visualLeft < monitorX) {
-            const overshoot = monitorX - visualLeft;
-            newX += overshoot * DAMPING_FACTOR;
-        }
-        if (visualRight > monitorX + monitorW) {
-            const overshoot = visualRight - (monitorX + monitorW);
-            newX -= overshoot * DAMPING_FACTOR;
-        }
-        if (visualTop < monitorY) {
-            const overshoot = monitorY - visualTop;
-            newY += overshoot * DAMPING_FACTOR;
-        }
-        if (visualBottom > monitorY + monitorH) {
-            const overshoot = visualBottom - (monitorY + monitorH);
-            newY -= overshoot * DAMPING_FACTOR;
-        }
+        // Intelligent Damping
+        const overshoot = calculateOvershoot(visualLeft, visualTop, wPhys, hPhys, allMonitors);
+        newX += overshoot.dx * DAMPING_FACTOR;
+        newY += overshoot.dy * DAMPING_FACTOR;
 
         isBusy.current = true;
         try {
@@ -175,9 +230,6 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
             rafId.current = null;
         }
 
-        // Wait for final update to settle? 
-        // We can just calculate the final snap logic immediately based on last known state.
-
         if (!dragState.current) return;
         const state = dragState.current;
         dragState.current = null; // Clear state
@@ -189,60 +241,34 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         let targetX = currentPos.x;
         let targetY = currentPos.y;
 
-        const { factor, monitorX, monitorW, monitorY, monitorH, widgetW: wW, widgetH: wH, alignX: dragAlignX, alignY: dragAlignY } = state;
+        const { factor, allMonitors, widgetW: wW, widgetH: wH, alignX: dragAlignX, alignY: dragAlignY } = state;
         const winPhysW = WIN_MAX_W * factor;
         const winPhysH = WIN_MAX_H * factor;
         const wPhys = wW * factor;
         const hPhys = wH * factor;
 
-        let visualLeft = 0;
-        let visualRight = 0;
-        let visualTop = 0;
-        let visualBottom = 0;
+        let vLeft = 0;
+        let vTop = 0;
 
         if (dragAlignX === 'start') {
-            visualLeft = targetX;
-            visualRight = targetX + wPhys;
+            vLeft = targetX;
         } else {
-            visualLeft = targetX + (winPhysW - wPhys);
-            visualRight = targetX + winPhysW;
+            vLeft = targetX + (winPhysW - wPhys);
         }
 
         if (dragAlignY === 'start') {
-            visualTop = targetY;
-            visualBottom = targetY + hPhys;
+            vTop = targetY;
         } else {
-            visualTop = targetY + (winPhysH - hPhys);
-            visualBottom = targetY + winPhysH;
+            vTop = targetY + (winPhysH - hPhys);
         }
 
-        let needsSnap = false;
+        const overshoot = calculateOvershoot(vLeft, vTop, wPhys, hPhys, allMonitors);
 
-        if (visualLeft < monitorX) {
-            const overshoot = monitorX - visualLeft;
-            targetX += overshoot;
-            needsSnap = true;
-        } else if (visualRight > monitorX + monitorW) {
-            const overshoot = visualRight - (monitorX + monitorW);
-            targetX -= overshoot;
-            needsSnap = true;
+        if (Math.abs(overshoot.dx) > 1 || Math.abs(overshoot.dy) > 1) {
+            animateTo(currentPos.x, currentPos.y, currentPos.x + overshoot.dx, currentPos.y + overshoot.dy);
         }
 
-        if (visualTop < monitorY) {
-            const overshoot = monitorY - visualTop;
-            targetY += overshoot;
-            needsSnap = true;
-        } else if (visualBottom > monitorY + monitorH) {
-            const overshoot = visualBottom - (monitorY + monitorH);
-            targetY -= overshoot;
-            needsSnap = true;
-        }
-
-        if (needsSnap) {
-            animateTo(currentPos.x, currentPos.y, targetX, targetY);
-        }
-
-    }, [handlePointerMove, updatePosition, animateTo]);
+    }, [handlePointerMove, animateTo]);
 
     const handlePointerDown = useCallback(async (e: React.PointerEvent) => {
         if (e.button !== 0) return;
@@ -265,10 +291,9 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const appWindow = getCurrentWindow();
         try {
             const factor = await appWindow.scaleFactor();
-            // Invoke Rust command to get Work Area (Physical Pixels)
-            // returns [x, y, width, height]
-            const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
-            const [waX, waY, waW, waH] = workArea;
+            // Fetch ALL monitor work areas for intelligent boundary detection
+            const monitorData = await invoke<[number, number, number, number][]>('get_all_monitors_work_area');
+            const allMonitors = monitorData.map(([x, y, w, h]) => ({ x, y, w, h }));
 
             const outerPos = await appWindow.outerPosition();
 
@@ -280,10 +305,7 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
                 startY: e.screenY,
                 winStartX: outerPos.x,
                 winStartY: outerPos.y,
-                monitorX: waX,
-                monitorY: waY,
-                monitorW: waW,
-                monitorH: waH,
+                allMonitors,
                 factor,
                 widgetW,
                 widgetH,

@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import {
     X,
     Minus,
-    GripVertical,
-    Database
+    GripVertical
 } from "lucide-react";
+import Logo from "./Logo";
 import {
     RedisIcon,
     PostgresIcon,
@@ -29,7 +29,7 @@ import Silk from "./BG";
 // UI 尺寸定义
 const UI_SIZES = {
     collapsed: { w: 56, h: 56, r: 28 },
-    toolbar: { w: 320, h: 56, r: 28 },
+    toolbar: { w: 200, h: 56, r: 28 }, // Initial visible width
     expanded: { w: 1200, h: 800, r: 16 }
 };
 
@@ -48,7 +48,41 @@ export default function FloatingApp() {
 
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
+    const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
+
     const isAnimatingRef = useRef(false);
+    const toolbarRef = useRef<HTMLDivElement>(null);
+
+    // 智能动态调整工具栏宽度
+    useEffect(() => {
+        if (viewMode === 'toolbar' && toolbarRef.current) {
+            const updateSize = () => {
+                // 核心修复：如果正在动画过程中，跳过测量更新，防止捕获错误的中间宽度
+                if (isAnimatingRef.current) return;
+
+                // 使用 scrollWidth 获取内容真实需要的宽度，不受容器限制
+                const width = toolbarRef.current?.scrollWidth || 0;
+                if (width > 0 && Math.abs(width - currentUiSize.w) > 1) { // 增加容错，避免微小抖动
+                    setCurrentUiSize(prev => ({ ...prev, w: width }));
+                    invoke('update_click_region', {
+                        width: width,
+                        height: UI_SIZES.toolbar.h,
+                        alignX: layoutAlign.x,
+                        alignY: layoutAlign.y
+                    });
+                }
+            };
+
+            const observer = new ResizeObserver(() => {
+                // 防止频繁触发，放入 requestAnimationFrame
+                requestAnimationFrame(updateSize);
+            });
+
+            observer.observe(toolbarRef.current);
+            updateSize();
+            return () => observer.disconnect();
+        }
+    }, [viewMode, layoutAlign, t, currentUiSize.w]); // 这里也可以通过 ref 减少依赖
 
     useEffect(() => {
         // 初始化时根据当前状态设置点击区域 (修复 HMR/重载时的显示问题)
@@ -59,8 +93,6 @@ export default function FloatingApp() {
             alignY: layoutAlign.y
         });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
 
     const { handlePointerDown: handleDragStart, isActuallyDragging } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
 
@@ -201,14 +233,14 @@ export default function FloatingApp() {
     };
 
     const getServiceIcon = (service: string | null, size = 18) => {
-        if (!service) return <Database size={size} className="text-gray-400" />;
+        if (!service) return <Logo size={size} />;
         switch (service) {
             case 'Redis': return <RedisIcon size={size} className="text-red-400" />;
             case 'PostgreSQL': return <PostgresIcon size={size} className="text-blue-400" />;
             case 'MySQL': return <MySQLIcon size={size} className="text-orange-400" />;
             case 'MongoDB': return <MongoIcon size={size} className="text-green-400" />;
             case 'SQLite': return <SQLiteIcon size={size} className="text-cyan-400" />;
-            default: return <Database size={size} className="text-blue-400" />;
+            default: return <Logo size={size} />;
         }
     };
 
@@ -283,22 +315,26 @@ export default function FloatingApp() {
             default:
 
                 return (
-                    <div className="flex items-center w-full h-full px-2 gap-1.5 bg-[#18181b]">
-                        <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors" onPointerDown={handleDragStart}>
+                    <div
+                        ref={toolbarRef}
+                        className="flex items-center h-full px-3 gap-1.5 bg-[#18181b] whitespace-nowrap"
+                        style={{ minWidth: 'max-content' }} // 确保内容始终完全渲染，不被父级裁剪
+                    >
+                        <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors shrink-0" onPointerDown={handleDragStart}>
                             <GripVertical size={20} />
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-2 rounded-lg transition-colors ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
+                            className={`flex items-center justify-between gap-3 px-2 py-2 rounded-lg transition-colors shrink-0 ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
                         >
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
                                 {getServiceIcon(connectedService)}
-                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor() }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : t('connect')}</span>
+                                <span className="text-sm font-medium truncate" style={{ color: getServiceColor() }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : t('brand_name')}</span>
                             </div>
 
                             {
                                 !connectedService && (
-                                    <div className="flex items-center -space-x-2 mr-1">
+                                    <div className="flex items-center -space-x-2 ml-1 shrink-0">
                                         {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
                                             <div key={i} className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center border border-white/10 relative z-[1] transition-transform group-hover:scale-110" style={{ zIndex: 10 - i }}>
                                                 <Icon size={12} className="text-gray-400" />
@@ -308,8 +344,8 @@ export default function FloatingApp() {
                                 )
                             }
                         </button >
-                        <div className="w-[1px] h-6 bg-white/10" />
-                        <div className="flex items-center gap-1">
+                        <div className="w-[1px] h-6 bg-white/10 shrink-0" />
+                        <div className="flex items-center gap-1 shrink-0">
                             <button onClick={() => handleChangeMode('collapsed')} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-white transition-colors">
                                 <Minus size={16} />
                             </button>
@@ -327,15 +363,18 @@ export default function FloatingApp() {
     return (
         <div className={containerFlexClass}>
             <div
-                className="bg-[#18181b] overflow-hidden shadow-2xl pointer-events-auto"
+                className="bg-[#18181b] pointer-events-auto relative outline-none"
                 style={{
                     width: `${currentUiSize.w}px`,
                     height: `${currentUiSize.h}px`,
                     borderRadius: `${currentUiSize.r}px`,
+                    clipPath: `inset(0px round ${currentUiSize.r}px)`,
+                    // 增加 1.5px 的实体扩边，彻底封死背景。同时使用无偏移的阴影。
+                    boxShadow: '0 0 0 1.5px #18181b, 0 8px 24px rgba(0, 0, 0, 0.5)',
                     willChange: 'width, height',
                     transitionProperty: 'width, height, border-radius',
                     transitionDuration: `${ANIMATION_DURATION}ms`,
-                    transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
+                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
                 }}
             >
                 {/* Persistent Background Layer */}
@@ -352,7 +391,7 @@ export default function FloatingApp() {
                     <Silk
                         speed={5}
                         scale={1}
-                        color="#4778ffff"
+                        color="#364774ff"
                         noiseIntensity={1.5}
                         rotation={2}
                     />
@@ -366,7 +405,7 @@ export default function FloatingApp() {
                     duration={400}
                 >
                     <div
-                        className="w-full h-full transition-opacity duration-150 ease-out relative z-10"
+                        className={`${viewMode === 'toolbar' ? 'w-fit' : 'w-full'} h-full transition-opacity duration-150 ease-out relative z-10`}
                         style={{ opacity: contentOpacity }}
                     >
                         {renderContent()}

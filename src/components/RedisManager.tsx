@@ -344,10 +344,10 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
     const handleDeleteKey = async (key: string) => {
         setConfirmState({
             isOpen: true,
-            title: "Delete Key",
-            message: `Are you sure you want to delete the key "${key}"? This will permanently remove all data associated with it.`,
+            title: t('delete_key_title'),
+            message: t('delete_key_msg').replace('{{key}}', key),
             isDestructive: true,
-            confirmText: "Delete",
+            confirmText: t('delete'),
             onConfirm: async () => {
                 try {
                     await invoke('redis_del_key', { key });
@@ -425,10 +425,10 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
     const handleDeleteRow = (rowIdx: number) => {
         setConfirmState({
             isOpen: true,
-            title: "Delete Row",
-            message: `Are you sure you want to delete this specific row? This change will be applied to the Redis value immediately.`,
+            title: t('delete_row_title'),
+            message: t('delete_row_redis_msg'),
             isDestructive: true,
-            confirmText: "Delete",
+            confirmText: t('delete'),
             onConfirm: async () => {
                 closeConfirm();
                 const newData = parsedData.filter((_, i) => i !== rowIdx);
@@ -485,22 +485,20 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
             });
         });
 
-        if (updates.length === 0) return;
-
         if (updates.length === 0 && newRows.length === 0) return;
 
         const message = (
             <div>
-                <p className="mb-2">Save <span className="text-white font-bold">{updates.length + newRows.length}</span> change(s) for key <span className="text-blue-400">{selectedKey}</span>?</p>
-                <p className="text-xs text-gray-500">This will overwrite the current value in Redis.</p>
+                <p className="mb-2">{t('save_changes_key_msg').replace('{{count}}', String(updates.length + newRows.length)).replace('{{key}}', selectedKey || '')}</p>
+                <p className="text-xs text-gray-500">{t('overwrite_redis_msg')}</p>
             </div>
         );
 
         setConfirmState({
             isOpen: true,
-            title: "Confirm Update",
+            title: t('confirm_update_title'),
             message: message,
-            confirmText: "Apply Changes",
+            confirmText: t('save_connection'), // Reusing some existing key or adding better one? For now t('save') is better.
             onConfirm: () => {
                 closeConfirm();
                 executeBatchUpdate();
@@ -604,13 +602,13 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                 <div className="flex items-center gap-2 mb-3 px-1 text-xs text-gray-500 justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <TableIcon size={12} />
-                        <span>{parsedData.length + newRows.length} items {(parsedData.length + newRows.length) === 1 ? 'entry' : 'entries'} in this key</span>
+                        <span>{parsedData.length + newRows.length} {t('rows')} in this key</span>
                         {mode === 'edit' && (
                             <button
                                 onClick={handleAddRow}
                                 className="ml-4 px-2 py-0.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded border border-blue-500/30 flex items-center gap-1 transition-colors"
                             >
-                                <Plus size={10} /> Add Item
+                                <Plus size={10} /> {t('add_row')}
                             </button>
                         )}
                     </div>
@@ -973,11 +971,11 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                             </div>
                         ) : activeView === 'console' ? (
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Interactive</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('interactive')}</span>
                                 <span className="text-white font-medium truncate text-lg">Redis Console</span>
                             </div>
                         ) : (
-                            <span className="text-gray-500 text-sm">Select a key to view data</span>
+                            <span className="text-gray-500 text-sm">{t('select_key')}</span>
                         )}
                     </div>
 
@@ -1144,7 +1142,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     onClick={() => setIsCreatingKey(false)}
                                     className="px-6 py-2.5 rounded-xl text-xs font-bold text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
                                 >
-                                    Cancel
+                                    {t('cancel')}
                                 </button>
                                 <button
                                     onClick={handleCreateKey}
@@ -1152,7 +1150,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest flex items-center gap-2"
                                 >
                                     {isLoading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Create Key
+                                    {t('create_key')}
                                 </button>
                             </div>
                         </div>
