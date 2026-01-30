@@ -79,20 +79,16 @@ export default function FloatingApp() {
             });
 
             observer.observe(toolbarRef.current);
-            updateSize();
-            return () => observer.disconnect();
-        }
-    }, [viewMode, layoutAlign, t, currentUiSize.w]); // 这里也可以通过 ref 减少依赖
+            // 初始延迟测量，确保 DOM 已经完全按照样式渲染完毕
+            // 缩短延迟，使其在大部分布局完成后尽早同步
+            const timer = setTimeout(updateSize, 60);
 
-    useEffect(() => {
-        // 初始化时根据当前状态设置点击区域 (修复 HMR/重载时的显示问题)
-        invoke('update_click_region', {
-            width: currentUiSize.w,
-            height: currentUiSize.h,
-            alignX: layoutAlign.x,
-            alignY: layoutAlign.y
-        });
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+            return () => {
+                observer.disconnect();
+                clearTimeout(timer);
+            };
+        }
+    }, [viewMode, layoutAlign, t]); // 移除了 currentUiSize.w 依赖，避免不必要的重新绑定
 
     const { handlePointerDown: handleDragStart, isActuallyDragging } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
 
@@ -334,12 +330,20 @@ export default function FloatingApp() {
 
                             {
                                 !connectedService && (
-                                    <div className="flex items-center -space-x-2 ml-1 shrink-0">
-                                        {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
-                                            <div key={i} className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center border border-white/10 relative z-[1] transition-transform group-hover:scale-110" style={{ zIndex: 10 - i }}>
-                                                <Icon size={12} className="text-gray-400" />
-                                            </div>
-                                        ))}
+                                    <div className="flex items-center ml-2 shrink-0">
+                                        <div className="flex items-center -space-x-2.5 hover:-space-x-1 transition-all duration-300 ease-out group/icons">
+                                            {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="w-6 h-6 rounded-full bg-[#1e1e22] flex items-center justify-center border border-white/10 shadow-sm relative transition-all duration-300 hover:scale-125 hover:z-20 hover:border-blue-500/50"
+                                                    style={{
+                                                        zIndex: 10 - i,
+                                                    }}
+                                                >
+                                                    <Icon size={12} className="text-gray-400 group-hover/icons:text-gray-200 transition-colors" />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )
                             }

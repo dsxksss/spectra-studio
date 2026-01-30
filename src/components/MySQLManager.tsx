@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search,
     RefreshCw,
@@ -1286,97 +1287,156 @@ export default function MySQLManager({ onClose, onDisconnect, onDragStart, conne
                                             </button>
 
                                             {/* Schema folders under this database */}
-                                            {expandedDatabases.has(db) && (
-                                                <div className="ml-4 mt-1 border-l border-white/5 pl-2">
-                                                    {/* Tables folder */}
-                                                    <button
-                                                        onClick={() => toggleFolder(`${db}:tables`)}
-                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                            <AnimatePresence>
+                                                {expandedDatabases.has(db) && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: "auto", opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                                                        className="ml-4 mt-1 border-l border-white/5 pl-2 overflow-hidden"
                                                     >
-                                                        {expandedFolders.has(`${db}:tables`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                        {dbTables.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
-                                                        <span>Tables ({dbTables.length})</span>
-                                                    </button>
-                                                    {expandedFolders.has(`${db}:tables`) && dbTables.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(table => (
-                                                        <div
-                                                            key={table}
-                                                            className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === table && selectedDatabase === db && activeView === 'browser'
-                                                                ? 'bg-orange-500/10 text-orange-400 font-medium'
-                                                                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-                                                                }`}
+                                                        {/* Tables folder */}
+                                                        <motion.button
+                                                            whileHover={{ x: 2 }}
+                                                            onClick={() => toggleFolder(`${db}:tables`)}
+                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
                                                         >
-                                                            <button onClick={() => handleSelectTable(db, table)} className="flex-1 flex items-center gap-2 min-w-0">
-                                                                <TableIcon size={12} className="opacity-70 shrink-0" />
-                                                                <span className="truncate" title={table}>{table}</span>
-                                                                {databaseTableSizes[db]?.[table] !== undefined && (
-                                                                    <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
-                                                                        {formatBytes(databaseTableSizes[db][table])}
-                                                                    </span>
-                                                                )}
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleSelectTable(db, table).then(() => handleDropTable(table)); }}
-                                                                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
-                                                                title={t('delete')}
-                                                            >
-                                                                <Trash2 size={10} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
+                                                            {expandedFolders.has(`${db}:tables`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                            {dbTables.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
+                                                            <span>Tables ({dbTables.length})</span>
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {expandedFolders.has(`${db}:tables`) && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: "auto", opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    {dbTables.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(table => (
+                                                                        <motion.div
+                                                                            key={table}
+                                                                            initial={{ x: -10, opacity: 0 }}
+                                                                            animate={{ x: 0, opacity: 1 }}
+                                                                            className={`group flex items-center gap-2 px-3 py-1.5 ml-4 rounded-lg text-sm transition-all ${selectedKey === table && selectedDatabase === db && activeView === 'browser'
+                                                                                ? 'bg-orange-500/10 text-orange-400 font-medium'
+                                                                                : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                                                }`}
+                                                                        >
+                                                                            <button onClick={() => handleSelectTable(db, table)} className="flex-1 flex items-center gap-2 min-w-0">
+                                                                                <TableIcon size={12} className="opacity-70 shrink-0" />
+                                                                                <span className="truncate" title={table}>{table}</span>
+                                                                                {databaseTableSizes[db]?.[table] !== undefined && (
+                                                                                    <span className="text-[10px] text-gray-500 ml-auto mr-1 font-mono whitespace-nowrap shrink-0">
+                                                                                        {formatBytes(databaseTableSizes[db][table])}
+                                                                                    </span>
+                                                                                )}
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleSelectTable(db, table).then(() => handleDropTable(table)); }}
+                                                                                className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                                                                title={t('delete')}
+                                                                            >
+                                                                                <Trash2 size={10} />
+                                                                            </button>
+                                                                        </motion.div>
+                                                                    ))}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
 
-                                                    {/* Views folder */}
-                                                    <button
-                                                        onClick={() => toggleFolder(`${db}:views`)}
-                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                    >
-                                                        {expandedFolders.has(`${db}:views`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                        <Eye size={12} />
-                                                        <span>{t('views')} ({dbViews.length})</span>
-                                                    </button>
-                                                    {expandedFolders.has(`${db}:views`) && dbViews.map(view => (
-                                                        <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                            <Eye size={12} className="opacity-50" />
-                                                            <span className="truncate">{view}</span>
-                                                        </div>
-                                                    ))}
+                                                        {/* Views folder */}
+                                                        <motion.button
+                                                            whileHover={{ x: 2 }}
+                                                            onClick={() => toggleFolder(`${db}:views`)}
+                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                        >
+                                                            {expandedFolders.has(`${db}:views`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                            <Eye size={12} />
+                                                            <span>{t('views')} ({dbViews.length})</span>
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {expandedFolders.has(`${db}:views`) && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: "auto", opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    {dbViews.map(view => (
+                                                                        <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                            <Eye size={12} className="opacity-50" />
+                                                                            <span className="truncate">{view}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
 
-                                                    {/* Functions folder */}
-                                                    <button
-                                                        onClick={() => toggleFolder(`${db}:functions`)}
-                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                    >
-                                                        {expandedFolders.has(`${db}:functions`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                        <Hash size={12} />
-                                                        <span>{t('functions')} ({dbFuncs.length})</span>
-                                                    </button>
-                                                    {expandedFolders.has(`${db}:functions`) && dbFuncs.map(func => (
-                                                        <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                            <Hash size={12} className="opacity-50" />
-                                                            <span className="truncate">{func}</span>
-                                                        </div>
-                                                    ))}
+                                                        {/* Functions folder */}
+                                                        <motion.button
+                                                            whileHover={{ x: 2 }}
+                                                            onClick={() => toggleFolder(`${db}:functions`)}
+                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                        >
+                                                            {expandedFolders.has(`${db}:functions`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                            <Hash size={12} />
+                                                            <span>{t('functions')} ({dbFuncs.length})</span>
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {expandedFolders.has(`${db}:functions`) && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: "auto", opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    {dbFuncs.map(func => (
+                                                                        <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                            <Hash size={12} className="opacity-50" />
+                                                                            <span className="truncate">{func}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
 
-                                                    {/* Procedures folder */}
-                                                    <button
-                                                        onClick={() => toggleFolder(`${db}:procedures`)}
-                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
-                                                    >
-                                                        {expandedFolders.has(`${db}:procedures`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                        <Terminal size={12} />
-                                                        <span>{t('procedures')} ({dbProcs.length})</span>
-                                                    </button>
-                                                    {expandedFolders.has(`${db}:procedures`) && dbProcs.map(proc => (
-                                                        <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
-                                                            <Terminal size={12} className="opacity-50" />
-                                                            <span className="truncate">{proc}</span>
-                                                        </div>
-                                                    ))}
+                                                        {/* Procedures folder */}
+                                                        <motion.button
+                                                            whileHover={{ x: 2 }}
+                                                            onClick={() => toggleFolder(`${db}:procedures`)}
+                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                                                        >
+                                                            {expandedFolders.has(`${db}:procedures`) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                            <Terminal size={12} />
+                                                            <span>{t('procedures')} ({dbProcs.length})</span>
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {expandedFolders.has(`${db}:procedures`) && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: "auto", opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    {dbProcs.map(proc => (
+                                                                        <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                            <Terminal size={12} className="opacity-50" />
+                                                                            <span className="truncate">{proc}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
 
-                                                    {isLoading && !databaseTables[db] && (
-                                                        <div className="ml-2 px-3 py-2 text-xs text-gray-600 italic">{t('loading')}</div>
-                                                    )}
-                                                </div>
-                                            )}
+                                                        {isLoading && !databaseTables[db] && (
+                                                            <div className="ml-2 px-3 py-2 text-xs text-gray-600 italic">{t('loading')}</div>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     );
                                 })}
