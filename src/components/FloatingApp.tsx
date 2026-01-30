@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import {
     X,
     Minus,
-    GripVertical
+    GripVertical,
+    Maximize2,
+    Minimize2
 } from "lucide-react";
 import Logo from "./Logo";
 import {
@@ -13,7 +15,7 @@ import {
     MongoIconSingle,
     SQLiteIcon
 } from "./icons";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
@@ -21,6 +23,7 @@ import PostgresManager from "./PostgresManager";
 import MySQLManager from "./MySQLManager";
 import SQLiteManager from "./SQLiteManager";
 import { useCustomDrag } from "../hooks/useCustomDrag";
+import { useResize, ResizeCorner } from "../hooks/useResize";
 import ClickSpark from "./ClickSpark";
 import Silk from "./BG";
 
@@ -29,7 +32,7 @@ import Silk from "./BG";
 // UI 尺寸定义
 const UI_SIZES = {
     collapsed: { w: 56, h: 56, r: 28 },
-    toolbar: { w: 200, h: 56, r: 28 }, // Initial visible width
+    toolbar: { w: 365, h: 56, r: 28 },
     expanded: { w: 1200, h: 800, r: 16 }
 };
 
@@ -43,184 +46,285 @@ export default function FloatingApp() {
     const [connectedService, setConnectedService] = useState<string | null>(null);
     const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
     const [connectionConfig, setConnectionConfig] = useState<any>(null);
+    const [preselectedService, setPreselectedService] = useState<string | null>(null);
     const [visibleContent, setVisibleContent] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [contentOpacity, setContentOpacity] = useState(1);
 
     const [currentUiSize, setCurrentUiSize] = useState(UI_SIZES.toolbar);
 
+    // 默认为右下角
     const [layoutAlign, setLayoutAlign] = useState<{ x: 'start' | 'end', y: 'start' | 'end' }>({ x: 'end', y: 'end' });
 
     const isAnimatingRef = useRef(false);
-    const toolbarRef = useRef<HTMLDivElement>(null);
+    // 智能动态调整工具栏宽度逻辑已被移除，使用固定宽度
 
-    // 智能动态调整工具栏宽度
-    useEffect(() => {
-        if (viewMode === 'toolbar' && toolbarRef.current) {
-            const updateSize = () => {
-                // 核心修复：如果正在动画过程中，跳过测量更新，防止捕获错误的中间宽度
-                if (isAnimatingRef.current) return;
+    const [isMaximized, setIsMaximized] = useState(false);
+    const [showBackground, setShowBackground] = useState(false);
 
-                // 使用 scrollWidth 获取内容真实需要的宽度，不受容器限制
-                const width = toolbarRef.current?.scrollWidth || 0;
-                if (width > 0 && Math.abs(width - currentUiSize.w) > 1) { // 增加容错，避免微小抖动
-                    setCurrentUiSize(prev => ({ ...prev, w: width }));
-                    invoke('update_click_region', {
-                        width: width,
-                        height: UI_SIZES.toolbar.h,
-                        alignX: layoutAlign.x,
-                        alignY: layoutAlign.y
-                    });
-                }
-            };
+    const resetToStandardSize = async () => {
+        const appWindow = getCurrentWindow();
+        const factor = await appWindow.scaleFactor();
+        const targetW = 1200 * factor;
+        const targetH = 800 * factor;
 
-            const observer = new ResizeObserver(() => {
-                // 防止频繁触发，放入 requestAnimationFrame
-                requestAnimationFrame(updateSize);
-            });
+        // Calculate Anchor (Bottom-Right)
+        const outerPos = await appWindow.outerPosition();
+        const outerSize = await appWindow.outerSize();
 
-            observer.observe(toolbarRef.current);
-            // 初始延迟测量，确保 DOM 已经完全按照样式渲染完毕
-            // 缩短延迟，使其在大部分布局完成后尽早同步
-            const timer = setTimeout(updateSize, 60);
+        const brX = outerPos.x + outerSize.width;
+        const brY = outerPos.y + outerSize.height;
 
-            return () => {
-                observer.disconnect();
-                clearTimeout(timer);
-            };
+        // New Top-Left
+        const newX = brX - targetW;
+        const newY = brY - targetH;
+
+        await Promise.all([
+            appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
+            appWindow.setSize(new PhysicalSize(Math.round(targetW), Math.round(targetH)))
+        ]);
+
+        setCurrentUiSize({ w: 1200, h: 800, r: UI_SIZES.expanded.r });
+        // Update persistent size
+        if (UI_SIZES.expanded) {
+            UI_SIZES.expanded.w = 1200;
+            UI_SIZES.expanded.h = 800;
         }
-    }, [viewMode, layoutAlign, t]); // 移除了 currentUiSize.w 依赖，避免不必要的重新绑定
+        setIsMaximized(false);
+    };
 
-    const { handlePointerDown: handleDragStart, isActuallyDragging } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
+    const toggleMaximize = async () => {
+        const appWindow = getCurrentWindow();
+        const factor = await appWindow.scaleFactor();
 
-    const handleChangeMode = async (targetMode: 'toolbar' | 'collapsed' | 'expanded') => {
+        if (isMaximized) {
+            // Restore
+            const targetW = UI_SIZES.expanded.w * factor;
+            const targetH = UI_SIZES.expanded.h * factor;
+
+            // Restore relies on persisted size, usually we center or reuse saved pos.
+            // Since we don't save pos, let's Center it in Work Area (as implemented before) OR Anchor Bottom Right?
+            // "Toggle Maximize" usually restores to previous position.
+            // But for simplicity/robustness, user didn't complain about Maximize/Restore behavior, 
+            // only about "Minimize" (Reset) behavior. 
+            // I'll keep Restore centering logic for now unless requested, 
+            // OR I can make Restore also Anchor BR if I knew where it was.
+            // Let's stick to existing logic for Toggle Maximize (Center).
+
+            const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+            const [waX, waY, waW, waH] = workArea;
+
+            const newX = waX + (waW - targetW) / 2;
+            const newY = waY + (waH - targetH) / 2;
+
+            await Promise.all([
+                appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
+                appWindow.setSize(new PhysicalSize(Math.round(targetW), Math.round(targetH)))
+            ]);
+
+            setCurrentUiSize(UI_SIZES.expanded);
+            setIsMaximized(false);
+        } else {
+            // Maximize
+            const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+            const [waX, waY, waW, waH] = workArea;
+
+            await Promise.all([
+                appWindow.setPosition(new PhysicalPosition(Math.round(waX), Math.round(waY))),
+                appWindow.setSize(new PhysicalSize(Math.round(waW), Math.round(waH)))
+            ]);
+
+            // We don't update UI_SIZES.expanded so we can restore later
+            setCurrentUiSize({ w: waW / factor, h: waH / factor, r: 0 }); // radius 0 for max
+            setIsMaximized(true);
+        }
+    };
+
+    const { handlePointerDown: handleDragStartBase, isActuallyDragging } = useCustomDrag(currentUiSize.w, currentUiSize.h, layoutAlign.x, layoutAlign.y);
+
+    const handleDragStart = (e: React.PointerEvent) => {
+        if (!isMaximized) handleDragStartBase(e);
+    };
+
+    // 四角拖拽缩放功能 - 最大尺寸根据屏幕工作区域动态计算
+    const { handleResizeStart } = useResize();
+
+    // 渲染四角拖拽手柄 - 放在容器内部四个角
+    const renderResizeHandles = () => {
+        if (viewMode !== 'expanded' || isMaximized) return null;
+
+        const corners: { corner: ResizeCorner; position: string; cursor: string }[] = [
+            { corner: 'nw', position: 'top-0 left-0', cursor: 'nw-resize' },
+            { corner: 'ne', position: 'top-0 right-0', cursor: 'ne-resize' },
+            { corner: 'sw', position: 'bottom-0 left-0', cursor: 'sw-resize' },
+            { corner: 'se', position: 'bottom-0 right-0', cursor: 'se-resize' }
+        ];
+
+        return corners.map(({ corner, position, cursor }) => (
+            <div
+                key={corner}
+                className={`absolute ${position} w-6 h-6 z-50 group pointer-events-auto`}
+                style={{ cursor }}
+                onPointerDown={(e) => handleResizeStart(
+                    e,
+                    corner,
+                    0, // unused width
+                    0, // unused height
+                    layoutAlign.x, // unused alignX
+                    layoutAlign.y, // unused alignY
+                    (w, h) => {
+                        setCurrentUiSize(prev => ({ ...prev, w, h }));
+                        // Persist the size for next expansion
+                        if (UI_SIZES.expanded) {
+                            UI_SIZES.expanded.w = w;
+                            UI_SIZES.expanded.h = h;
+                        }
+                    }
+                )}
+            >
+                {/* 圆角弧线装饰 - hover时高亮 */}
+                <div
+                    className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                        ${corner === 'nw' ? 'rounded-tl-[16px] border-t-[4px] border-l-[4px]' : ''}
+                        ${corner === 'ne' ? 'rounded-tr-[16px] border-t-[4px] border-r-[4px]' : ''}
+                        ${corner === 'sw' ? 'rounded-bl-[16px] border-b-[4px] border-l-[4px]' : ''}
+                        ${corner === 'se' ? 'rounded-br-[16px] border-b-[4px] border-r-[4px]' : ''}
+                        border-white/80
+                    `}
+                />
+            </div>
+        ));
+    };
+
+    const handleChangeMode = async (targetMode: 'toolbar' | 'collapsed' | 'expanded', service?: string) => {
         if (targetMode === viewMode || isAnimatingRef.current) return;
 
-        const currentSize = UI_SIZES[viewMode];
-        const targetSize = UI_SIZES[targetMode];
-        const isExpanding = targetSize.w > currentSize.w || targetSize.h > currentSize.h;
-
-        let newAlignX = layoutAlign.x;
-        let newAlignY = layoutAlign.y;
-
-        if (isExpanding) {
-            try {
-                const appWindow = getCurrentWindow();
-                const factor = await appWindow.scaleFactor();
-                const currentOuterPos = await appWindow.outerPosition();
-                const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
-                const [waX, waY, waW, waH] = workArea;
-
-                const winPhysW = UI_SIZES.expanded.w * factor;
-                const winPhysH = UI_SIZES.expanded.h * factor;
-
-                const currentPhysW = currentSize.w * factor;
-                const currentPhysH = currentSize.h * factor;
-
-                // 1. Calculate Visual Top-Left of the CURRENT content (before expansion check)
-                // This depends on the OLD alignment
-                let visualLeft = currentOuterPos.x;
-                let visualTop = currentOuterPos.y;
-
-                if (layoutAlign.x === 'end') {
-                    visualLeft = currentOuterPos.x + (winPhysW - currentPhysW);
-                }
-                if (layoutAlign.y === 'end') {
-                    visualTop = currentOuterPos.y + (winPhysH - currentPhysH);
-                }
-
-                // 2. Determine NEW Desired Alignment based on Quadrant
-                // Center point of visual content
-                const midX = visualLeft + currentPhysW / 2;
-                const midY = visualTop + currentPhysH / 2;
-                const screenMidX = waX + waW / 2;
-                const screenMidY = waY + waH / 2;
-
-                newAlignX = midX < screenMidX ? 'start' : 'end'; // Left side -> Align Start (Expand Right)
-                newAlignY = midY < screenMidY ? 'start' : 'end'; // Top Side -> Align Start (Expand Down)
-
-                // 3. Calculate NEW Window Position to maintain Visual Position
-                let targetWinX = currentOuterPos.x;
-                let targetWinY = currentOuterPos.y;
-
-                if (newAlignX === 'start') {
-                    // If Align Start, Window X = Visual Left
-                    targetWinX = visualLeft;
-                } else {
-                    // If Align End, Window X = Visual Left - (Window W - Content W)
-                    // Note: We use CURRENT content width for the transition point
-                    targetWinX = visualLeft - (winPhysW - currentPhysW);
-                }
-
-                if (newAlignY === 'start') {
-                    targetWinY = visualTop;
-                } else {
-                    targetWinY = visualTop - (winPhysH - currentPhysH);
-                }
-
-                // 4. Safety Bounds Check (Keep Window fully on screen)
-                if (targetWinX < waX) targetWinX = waX;
-                if (targetWinY < waY) targetWinY = waY;
-                if (targetWinX + winPhysW > waX + waW) targetWinX = (waX + waW) - winPhysW;
-                if (targetWinY + winPhysH > waY + waH) targetWinY = (waY + waH) - winPhysH;
-
-                // 5. Apply Changes
-                if (targetWinX !== currentOuterPos.x || targetWinY !== currentOuterPos.y) {
-                    await appWindow.setPosition(new PhysicalPosition(
-                        Math.round(targetWinX),
-                        Math.round(targetWinY)
-                    ));
-                }
-
-                // Update alignment state
-                setLayoutAlign({ x: newAlignX, y: newAlignY });
-
-            } catch (err) {
-                console.error("Failed to adjust window position:", err);
-            }
+        if (service) {
+            setPreselectedService(service);
+        } else {
+            // If going back to toolbar, maybe clear it? Not strictly necessary but good for cleanup
+            if (targetMode === 'toolbar') setPreselectedService(null);
         }
 
         isAnimatingRef.current = true;
 
+        // 1. Fade out current content
         setContentOpacity(0);
-        await new Promise(r => setTimeout(r, 50));
 
-        if (isExpanding) {
-            // 变大：先扩大点击区域
+        // If collapsing, hide background IMMEDIATELY to prevent glitch during resize
+        if (targetMode !== 'expanded') {
+            setShowBackground(false);
+        }
+
+        await new Promise(r => setTimeout(r, 150)); // Wait for fade out
+
+        try {
+            const appWindow = getCurrentWindow();
+            const factor = await appWindow.scaleFactor();
+            const currentOuterPos = await appWindow.outerPosition();
+            const currentSize = UI_SIZES[viewMode];
+            const targetSize = UI_SIZES[targetMode];
+
+            // Current Physical Bounds
+            const curPhysW = currentSize.w * factor;
+            const curPhysH = currentSize.h * factor;
+            const targetPhysW = targetSize.w * factor;
+            const targetPhysH = targetSize.h * factor;
+
+            // 2. Identify Anchor Point based on CURRENT layout alignment
+            // This is the point that should remain stationary
+            let anchorX = currentOuterPos.x;
+            let anchorY = currentOuterPos.y;
+
+            if (layoutAlign.x === 'end') {
+                anchorX = currentOuterPos.x + curPhysW;
+            }
+            if (layoutAlign.y === 'end') {
+                anchorY = currentOuterPos.y + curPhysH;
+            }
+
+            // 3. Determine NEW Alignment if Expanding
+            // If we are expanding, we might need to flip alignment if we are too close to screen edges
+            let nextAlignX = layoutAlign.x;
+            let nextAlignY = layoutAlign.y;
+
+            if (targetMode === 'expanded') {
+                const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+                const [waX, waY, waW, waH] = workArea;
+                const screenMidX = waX + waW / 2;
+                const screenMidY = waY + waH / 2;
+
+                // Center of current window
+                const centerX = currentOuterPos.x + curPhysW / 2;
+                const centerY = currentOuterPos.y + curPhysH / 2;
+
+                nextAlignX = centerX < screenMidX ? 'start' : 'end';
+                nextAlignY = centerY < screenMidY ? 'start' : 'end';
+
+                // If expanding and alignment changes, we effectively pivot around the current 'center' or 'corner' 
+                // closest to the center? 
+                // Creating a smooth transition when flipping alignment is tricky. 
+                // Let's stick to the simplest anchor: The current top-left (if start) or top-right (if end).
+
+                if (nextAlignX === 'start') {
+                    // We want to be Start aligned. Anchor is Top-Left.
+                    anchorX = currentOuterPos.x;
+                } else {
+                    // We want to be End aligned. Anchor is Top-Right (conceptually)
+                    anchorX = currentOuterPos.x + curPhysW;
+                }
+
+                if (nextAlignY === 'start') {
+                    anchorY = currentOuterPos.y;
+                } else {
+                    anchorY = currentOuterPos.y + curPhysH;
+                }
+            }
+
+            // 4. Calculate Target Window Position (Top-Left)
+            let targetWinX = anchorX;
+            let targetWinY = anchorY;
+
+            if (nextAlignX === 'end') {
+                targetWinX = anchorX - targetPhysW;
+            }
+            if (nextAlignY === 'end') {
+                targetWinY = anchorY - targetPhysH;
+            }
+
+            // 5. Apply Position and Size
+            // Set position FIRST to anchor it, then size.
+            await appWindow.setPosition(new PhysicalPosition(Math.round(targetWinX), Math.round(targetWinY)));
+
+            // Use update_click_region for size to ensure backend consistency (or just use setSize)
             await invoke('update_click_region', {
                 width: targetSize.w,
                 height: targetSize.h,
-                alignX: newAlignX,
-                alignY: newAlignY
+                alignX: nextAlignX,
+                alignY: nextAlignY
             });
 
-            setVisibleContent(targetMode);
+            // Update State
+            setLayoutAlign({ x: nextAlignX, y: nextAlignY });
             setViewMode(targetMode);
+            setVisibleContent(targetMode);
+            setCurrentUiSize(targetSize);
 
+            if (targetMode === 'expanded') {
+                setShowBackground(true);
+            }
+
+            // 6. Fade In
             requestAnimationFrame(() => {
-                setCurrentUiSize(targetSize);
-                setTimeout(() => setContentOpacity(1), 100);
+                setTimeout(() => setContentOpacity(1), 50);
                 setTimeout(() => {
                     isAnimatingRef.current = false;
-                }, ANIMATION_DURATION + 50);
+                }, ANIMATION_DURATION);
             });
 
-        } else {
-            // 变小：先做动画
-            setVisibleContent(targetMode);
-            setViewMode(targetMode);
-            setCurrentUiSize(targetSize);
-            setTimeout(() => setContentOpacity(1), 50);
-
-            // 动画结束后缩小点击区域
-            setTimeout(async () => {
-                await invoke('update_click_region', {
-                    width: targetSize.w,
-                    height: targetSize.h,
-                    alignX: layoutAlign.x,
-                    alignY: layoutAlign.y
-                });
-                isAnimatingRef.current = false;
-            }, ANIMATION_DURATION);
+        } catch (err) {
+            console.error("Transition failed:", err);
+            isAnimatingRef.current = false;
+            setContentOpacity(1); // Ensure visible on error
         }
     };
 
@@ -263,6 +367,31 @@ export default function FloatingApp() {
             case 'expanded':
                 return (
                     <div className="w-full h-full relative flex flex-col overflow-hidden">
+                        {/* Windows Controls Overlay */}
+                        <div className="absolute top-4 right-4 z-[60] flex items-center gap-2 bg-[#18181b]/80 backdrop-blur rounded-lg p-1 border border-white/5 shadow-lg">
+                            <button
+                                onClick={resetToStandardSize}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                title="Reset Size (1200x800)"
+                            >
+                                <Minimize2 size={14} />
+                            </button>
+                            <button
+                                onClick={toggleMaximize}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                title={isMaximized ? "Restore" : "Maximize"}
+                            >
+                                {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                            </button>
+                            <button
+                                onClick={() => getCurrentWindow().close()}
+                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-md transition-colors"
+                                title="Close"
+                            >
+                                <Minus size={14} />
+                            </button>
+                        </div>
+
                         <div className="relative z-10 w-full h-full flex flex-col">
                             {connectedService === 'Redis' ? (
                                 <RedisManager
@@ -301,7 +430,7 @@ export default function FloatingApp() {
                                         setCurrentConnectionName(n);
                                         setConnectionConfig(config);
                                     }}
-                                    activeService={connectedService}
+                                    activeService={preselectedService || connectedService}
                                     onDragStart={handleDragStart}
                                 />
                             )}
@@ -312,16 +441,15 @@ export default function FloatingApp() {
 
                 return (
                     <div
-                        ref={toolbarRef}
                         className="flex items-center h-full px-3 gap-1.5 bg-[#18181b] whitespace-nowrap"
-                        style={{ minWidth: 'max-content' }} // 确保内容始终完全渲染，不被父级裁剪
+
                     >
                         <div className="cursor-move text-gray-500 hover:text-gray-300 transition-colors shrink-0" onPointerDown={handleDragStart}>
                             <GripVertical size={20} />
                         </div>
                         <button
                             onClick={() => handleChangeMode('expanded')}
-                            className={`flex items-center justify-between gap-3 px-2 py-2 rounded-lg transition-colors shrink-0 ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
+                            className={`flex-1 flex items-center justify-between gap-3 px-2 py-2 rounded-lg transition-colors min-w-0 ${connectedService ? 'text-blue-400 hover:bg-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white group'}`}
                         >
                             <div className="flex items-center gap-2 min-w-0">
                                 {getServiceIcon(connectedService)}
@@ -332,10 +460,20 @@ export default function FloatingApp() {
                                 !connectedService && (
                                     <div className="flex items-center ml-2 shrink-0">
                                         <div className="flex items-center -space-x-2.5 hover:-space-x-1 transition-all duration-300 ease-out group/icons">
-                                            {[SQLiteIcon, PostgresIcon, MySQLIcon, MongoIconSingle, RedisIcon].map((Icon, i) => (
+                                            {[
+                                                { name: 'SQLite', icon: SQLiteIcon },
+                                                { name: 'PostgreSQL', icon: PostgresIcon },
+                                                { name: 'MySQL', icon: MySQLIcon },
+                                                { name: 'MongoDB', icon: MongoIconSingle },
+                                                { name: 'Redis', icon: RedisIcon }
+                                            ].map(({ name, icon: Icon }, i) => (
                                                 <div
-                                                    key={i}
-                                                    className="w-6 h-6 rounded-full bg-[#1e1e22] flex items-center justify-center border border-white/10 shadow-sm relative transition-all duration-300 hover:scale-125 hover:z-20 hover:border-blue-500/50"
+                                                    key={name}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleChangeMode('expanded', name);
+                                                    }}
+                                                    className="w-6 h-6 rounded-full bg-[#1e1e22] flex items-center justify-center border border-white/10 shadow-sm relative transition-all duration-300 hover:scale-125 hover:z-20 hover:border-blue-500/50 cursor-pointer"
                                                     style={{
                                                         zIndex: 10 - i,
                                                     }}
@@ -369,26 +507,21 @@ export default function FloatingApp() {
             <div
                 className="bg-[#18181b] pointer-events-auto relative outline-none"
                 style={{
-                    width: `${currentUiSize.w}px`,
-                    height: `${currentUiSize.h}px`,
+                    width: viewMode === 'expanded' ? '100vw' : `${currentUiSize.w}px`,
+                    height: viewMode === 'expanded' ? '100vh' : `${currentUiSize.h}px`,
                     borderRadius: `${currentUiSize.r}px`,
                     clipPath: `inset(0px round ${currentUiSize.r}px)`,
-                    // 增加 1.5px 的实体扩边，彻底封死背景。同时使用无偏移的阴影。
                     boxShadow: '0 0 0 1.5px #18181b, 0 8px 24px rgba(0, 0, 0, 0.5)',
-                    willChange: 'width, height',
-                    transitionProperty: 'width, height, border-radius',
-                    transitionDuration: `${ANIMATION_DURATION}ms`,
-                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
                 }}
             >
                 {/* Persistent Background Layer */}
                 <div
                     className="absolute py-[1px] inset-0 z-0 transition-opacity pointer-events-none overflow-hidden"
                     style={{
-                        opacity: viewMode === 'expanded' ? 1 : 0,
+                        opacity: showBackground ? 1 : 0,
                         borderRadius: `${currentUiSize.r}px`,
-                        transitionDelay: viewMode === 'expanded' ? '150ms' : '0ms',
-                        transitionDuration: viewMode === 'expanded' ? '300ms' : '100ms',
+                        transitionDelay: showBackground ? '150ms' : '0ms',
+                        transitionDuration: showBackground ? '300ms' : '0ms',
                         transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
                     }}
                 >
@@ -409,12 +542,15 @@ export default function FloatingApp() {
                     duration={400}
                 >
                     <div
-                        className={`${viewMode === 'toolbar' ? 'w-fit' : 'w-full'} h-full transition-opacity duration-150 ease-out relative z-10`}
+                        className={`w-full h-full transition-opacity duration-150 ease-out relative z-10`}
                         style={{ opacity: contentOpacity }}
                     >
                         {renderContent()}
                     </div>
                 </ClickSpark>
+
+                {/* 四角拖拽手柄 */}
+                {renderResizeHandles()}
             </div>
         </div>
     );

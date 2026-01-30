@@ -2,8 +2,7 @@ import { useRef, useCallback } from 'react';
 import { getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 
-const WIN_MAX_W = 1200;
-const WIN_MAX_H = 800;
+
 
 interface MonitorArea {
     x: number;
@@ -150,8 +149,7 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const {
             startX, startY, winStartX, winStartY,
             allMonitors,
-            factor, widgetW: currentWidgetW, widgetH: currentWidgetH,
-            alignX: dragAlignX, alignY: dragAlignY
+            factor, widgetW: currentWidgetW, widgetH: currentWidgetH
         } = dragState.current;
 
         const currentX = mousePos.current.x;
@@ -160,7 +158,6 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const deltaX = (currentX - startX) * factor;
         const deltaY = (currentY - startY) * factor;
 
-        // Check drag threshold
         if (!hasDragged.current && (Math.abs(currentX - startX) > DRAG_THRESHOLD || Math.abs(currentY - startY) > DRAG_THRESHOLD)) {
             hasDragged.current = true;
         }
@@ -168,26 +165,14 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         let newX = winStartX + deltaX;
         let newY = winStartY + deltaY;
 
-        // Visual Bounds (Physical)
-        const winPhysW = WIN_MAX_W * factor;
-        const winPhysH = WIN_MAX_H * factor;
+        // Calculate physical dimensions for overshoot detection
         const wPhys = currentWidgetW * factor;
         const hPhys = currentWidgetH * factor;
 
-        let visualLeft = 0;
-        let visualTop = 0;
-
-        if (dragAlignX === 'start') {
-            visualLeft = newX;
-        } else {
-            visualLeft = newX + (winPhysW - wPhys);
-        }
-
-        if (dragAlignY === 'start') {
-            visualTop = newY;
-        } else {
-            visualTop = newY + (winPhysH - hPhys);
-        }
+        // With the new architecture, the window size exactly matches the widget size.
+        // So the visual top-left is simply the window's position (newX, newY).
+        const visualLeft = newX;
+        const visualTop = newY;
 
         // Intelligent Damping
         const overshoot = calculateOvershoot(visualLeft, visualTop, wPhys, hPhys, allMonitors);
@@ -241,28 +226,15 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         let targetX = currentPos.x;
         let targetY = currentPos.y;
 
-        const { factor, allMonitors, widgetW: wW, widgetH: wH, alignX: dragAlignX, alignY: dragAlignY } = state;
-        const winPhysW = WIN_MAX_W * factor;
-        const winPhysH = WIN_MAX_H * factor;
-        const wPhys = wW * factor;
-        const hPhys = wH * factor;
+        const { factor, allMonitors, widgetW: wW, widgetH: wH } = state;
+        const winPhysW = wW * factor;
+        const winPhysH = wH * factor;
 
-        let vLeft = 0;
-        let vTop = 0;
+        // Visual position IS the window position now
+        const vLeft = targetX;
+        const vTop = targetY;
 
-        if (dragAlignX === 'start') {
-            vLeft = targetX;
-        } else {
-            vLeft = targetX + (winPhysW - wPhys);
-        }
-
-        if (dragAlignY === 'start') {
-            vTop = targetY;
-        } else {
-            vTop = targetY + (winPhysH - hPhys);
-        }
-
-        const overshoot = calculateOvershoot(vLeft, vTop, wPhys, hPhys, allMonitors);
+        const overshoot = calculateOvershoot(vLeft, vTop, winPhysW, winPhysH, allMonitors);
 
         if (Math.abs(overshoot.dx) > 1 || Math.abs(overshoot.dy) > 1) {
             animateTo(currentPos.x, currentPos.y, currentPos.x + overshoot.dx, currentPos.y + overshoot.dy);

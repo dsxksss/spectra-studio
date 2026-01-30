@@ -13,8 +13,9 @@
     "windows": [
       {
         "title": "",
-        "width": 420,
-        "height": 56,
+        "width": 1920,
+        "height": 1080,
+        "maximized": true,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

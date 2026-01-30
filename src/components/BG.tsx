@@ -105,7 +105,7 @@ const SilkPlane = forwardRef<Mesh, SilkPlaneProps>(function SilkPlane({ uniforms
             const material = mesh.current.material as ShaderMaterial & {
                 uniforms: SilkUniforms;
             };
-            material.uniforms.uTime.value += 0.1 * delta;
+            material.uniforms.uTime.value += 0.5 * delta;
         }
     });
 
@@ -142,7 +142,15 @@ const Silk: React.FC<SilkProps> = ({ speed = 5, scale = 1, color = '#7B7481', no
     );
 
     return (
-        <Canvas dpr={[1, 2]} frameloop="always">
+        <Canvas
+            dpr={1}
+            frameloop="always"
+            gl={{
+                antialias: false,
+                powerPreference: "high-performance",
+                alpha: true
+            }}
+        >
             <SilkPlane ref={meshRef} uniforms={uniforms} />
         </Canvas>
     );
