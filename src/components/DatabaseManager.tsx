@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { Toast, ToastType } from './Toast';
 import {
     RedisIcon,
@@ -205,6 +206,15 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [dbName, setDbName] = useState('postgres');
+    const [appVersion, setAppVersion] = useState("v0.1.0");
+
+    useEffect(() => {
+        getVersion().then(v => {
+            setAppVersion(`v${v}`);
+        }).catch(err => {
+            console.error('Failed to get version', err);
+        });
+    }, []);
 
     useEffect(() => {
         if (!isCustomName) {
@@ -670,7 +680,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             <div className="absolute w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
                             <div className="absolute w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75"></div>
                         </div>
-                        <span className="font-medium tracking-wide">v0.1.0 Stable</span>
+                        <span className="font-medium tracking-wide">{appVersion} Stable</span>
                     </div>
                     <button
                         onClick={() => setShowSettings(true)}

@@ -4385,6 +4385,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "spectra-studio"
+version = "0.1.0"
+dependencies = [
+ "mongodb",
+ "raw-window-handle",
+ "redis",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "windows",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4900,23 +4917,6 @@ dependencies = [
  "syn 2.0.104",
  "tauri-codegen",
  "tauri-utils",
-]
-
-[[package]]
-name = "tauri-nextjs-template"
-version = "0.1.0"
-dependencies = [
- "mongodb",
- "raw-window-handle",
- "redis",
- "serde",
- "serde_json",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "windows",
 ]
 
 [[package]]
