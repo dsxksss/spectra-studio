@@ -121,6 +121,59 @@ const ServiceSelect = ({ value, onChange }: { value: string, onChange: (val: str
     );
 };
 
+const LanguageSelect = ({ value, onChange }: { value: string, onChange: (val: any) => void }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const languages = [
+        { id: 'en', name: 'English', icon: '🇺🇸' },
+        { id: 'zh', name: '中文', icon: '🇨🇳' }
+    ];
+    const selected = languages.find(l => l.id === value) || languages[0];
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-4 flex items-center justify-between text-gray-300 text-sm focus:outline-none focus:border-blue-500/50 transition-all shadow-sm hover:bg-white/5 active:scale-[0.99]"
+            >
+                <div className="flex items-center gap-3">
+                    <span className="text-lg leading-none">{selected.icon}</span>
+                    <span className="font-medium">{selected.name}</span>
+                </div>
+                <ChevronDown size={16} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                            transition={{ duration: 0.1 }}
+                            className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1"
+                        >
+                            {languages.map(lang => (
+                                <button
+                                    key={lang.id}
+                                    onClick={() => {
+                                        onChange(lang.id);
+                                        setIsOpen(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-sm flex items-center gap-3 transition-colors ${value === lang.id ? 'bg-blue-500/10 text-blue-400' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
+                                >
+                                    <span className="text-lg leading-none">{lang.icon}</span>
+                                    <span className="font-medium">{lang.name}</span>
+                                    {value === lang.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />}
+                                </button>
+                            ))}
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 const InputField = ({ label, placeholder, type = "text", value, onChange, className = "" }: any) => (
     <div className={`flex flex-col gap-2.5 ${className}`}>
         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{label}</label>
@@ -137,7 +190,10 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
     </div>
 );
 
+import { useTranslation } from '../i18n/I18nContext';
+
 export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string, config?: any) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
+    const { t, language, setLanguage } = useTranslation();
     const [selectedService, setSelectedService] = useState(activeService || 'PostgreSQL');
     const [showPassword, setShowPassword] = useState(false);
 
@@ -348,7 +404,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         showToast('Connection deleted', 'success');
     };
 
-    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false) => {
+    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false, nameOverride?: string) => {
         setIsConnecting(true);
         try {
             let res;
@@ -407,7 +463,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     database: dbArg,
                     type: service
                 };
-                onConnect(service, connectionName || 'Unsaved Connection', config);
+                onConnect(service, nameOverride || connectionName || t('unsaved_connection'), config);
             }
         } catch (err: any) {
             console.error(`${service} Connection Failed:`, err);
@@ -424,11 +480,11 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const handleSavedConnect = (e: React.MouseEvent, conn: SavedConnection) => {
         e.stopPropagation();
         // Just connect, do not load into form (user rule: edit only via context menu)
-        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false);
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name);
     };
 
     const handleDoubleClick = (conn: SavedConnection) => {
-        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false);
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name);
     };
 
     const filteredConnections = savedConnections.filter(c =>
@@ -449,7 +505,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={16} />
                         <input
                             type="text"
-                            placeholder="Find connection..."
+                            placeholder={t('search')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-[#18181b] border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-sm text-gray-300 focus:outline-none focus:border-blue-500/30 focus:bg-[#1c1c1f] transition-all placeholder:text-gray-600 shadow-sm"
@@ -460,12 +516,12 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                 {/* Explorer Section */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="flex items-center justify-between px-6 py-4">
-                        <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">My Connections</span>
+                        <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">{t('connection_name')}</span>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleCreateNew}
                                 className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                                title="Add New Connection"
+                                title={t('new_connection')}
                             >
                                 <Plus size={14} />
                             </button>
@@ -483,12 +539,12 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/5">
                                 <Box size={20} className="text-gray-600" />
                             </div>
-                            <span className="text-sm font-medium text-gray-500 mb-2">No connections found</span>
+                            <span className="text-sm font-medium text-gray-500 mb-2">{t('no_data')}</span>
                             <button
                                 onClick={handleCreateNew}
                                 className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20 hover:border-blue-500/40"
                             >
-                                <Plus size={12} /> Create New
+                                <Plus size={12} /> {t('new_connection')}
                             </button>
                         </motion.div>
                     ) : (
@@ -594,14 +650,14 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 onClick={handleEditConnection}
                                 className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition-colors"
                             >
-                                <Pencil size={14} /> Edit Connection
+                                <Pencil size={14} /> {t('edit_connection')}
                             </button>
                             <div className="h-[1px] bg-white/5 my-1" />
                             <button
                                 onClick={handleDeleteConnection}
                                 className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-2 transition-colors"
                             >
-                                <Trash2 size={14} /> Delete
+                                <Trash2 size={14} /> {t('delete')}
                             </button>
                         </motion.div>
                     )}
@@ -653,15 +709,15 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             <h1 className="text-3xl font-bold text-white mb-1.5 tracking-tight flex items-center gap-3">
                                 {editingId ? (
                                     <>
-                                        Edit Connection
-                                        <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs px-2 py-0.5 rounded uppercase tracking-wider font-bold">Editing</span>
+                                        {t('edit_connection')}
+                                        <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs px-2 py-0.5 rounded uppercase tracking-wider font-bold">{t('edit')}</span>
                                     </>
-                                ) : 'New Connection'}
+                                ) : t('new_connection')}
                             </h1>
                             <p className="text-gray-400 text-sm flex items-center gap-2">
-                                {editingId ? 'Modify existing configuration' : 'Configure your database connection'}
+                                {editingId ? 'Modify existing configuration' : t('configure_connection')}
                                 <span className="w-1 h-1 rounded-full bg-gray-600" />
-                                <span className="text-gray-500 text-xs">Secure Environment</span>
+                                <span className="text-gray-500 text-xs">{t('secure_env')}</span>
                             </p>
                         </div>
                     </motion.div>
@@ -681,7 +737,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         {/* Row 1: Name & Database Type Dropdown */}
                         <div className="flex gap-4 px-8">
                             <div className="space-y-2.5 flex-[3]">
-                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Connection Name</label>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{t('connection_name')}</label>
                                 <input
                                     type="text"
                                     value={connectionName}
@@ -694,7 +750,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 />
                             </div>
                             <div className="space-y-2.5 flex-[2]">
-                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Database Type</label>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{t('db_type')}</label>
                                 <ServiceSelect value={selectedService} onChange={handleServiceChange} />
                             </div>
                         </div>
@@ -711,13 +767,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
                             <div className="flex items-center gap-3 mb-2">
                                 <span className="font-mono text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded text-xs">{">_"}</span>
-                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Connection Details</h3>
+                                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">{t('connection_details')}</h3>
                             </div>
 
                             <div className="flex gap-4">
                                 <div className="flex-[3]">
                                     <InputField
-                                        label={selectedService === 'SQLite' ? "Database Path" : "Host / IP Address"}
+                                        label={selectedService === 'SQLite' ? t('db_file') : t('host')}
                                         value={host}
                                         onChange={(e: any) => setHost(e.target.value)}
                                         placeholder={selectedService === 'SQLite' ? "e.g. /path/to/db.sqlite" : "e.g. 127.0.0.1"}
@@ -725,7 +781,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 </div>
                                 {selectedService !== 'SQLite' && (
                                     <div className="flex flex-col gap-2.5 flex-[1]">
-                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Port</label>
+                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{t('port')}</label>
                                         <div className="flex items-center h-[46px] bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
                                             <button
                                                 onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
@@ -751,16 +807,16 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
                             <div className="flex gap-4">
                                 <div className="flex-1">
-                                    <InputField label="Username" value={username} onChange={(e: any) => setUsername(e.target.value)} placeholder="Enter username" />
+                                    <InputField label={t('username')} value={username} onChange={(e: any) => setUsername(e.target.value)} placeholder={t('enter_username')} />
                                 </div>
                                 <div className="flex flex-col gap-2.5 flex-1">
-                                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Password</label>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{t('password')}</label>
                                     <div className="relative group">
                                         <input
                                             type={showPassword ? "text" : "password"}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            placeholder="Enter password"
+                                            placeholder={t('enter_password')}
                                             className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
                                         />
                                         <button
@@ -777,7 +833,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 <InputField label="Database Index" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="0" />
                             )}
                             {(selectedService === 'PostgreSQL' || selectedService === 'MySQL') && (
-                                <InputField label="Database Name" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="public" />
+                                <InputField label={t('database')} value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="public" />
                             )}
                             {selectedService === 'MongoDB' && (
                                 <div className="grid grid-cols-2 gap-4">
@@ -803,7 +859,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         className="flex items-center gap-2 px-8 py-3 rounded-xl text-gray-400 hover:text-white bg-white/5 border border-white/5 transition-all font-medium text-sm"
                     >
                         <X size={18} />
-                        <span>Cancel</span>
+                        <span>{t('cancel')}</span>
                     </motion.button>
                     <motion.button
                         whileHover={{ scale: 1.03 }}
@@ -819,7 +875,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 <Activity size={18} className="text-blue-500 group-hover:text-blue-400" />
                             )}
                         </div>
-                        <span>{isConnecting ? 'Testing...' : 'Test Connection'}</span>
+                        <span>{isConnecting ? t('loading') : t('test_connection')}</span>
                     </motion.button>
                     <motion.button
                         whileHover={{ scale: 1.02, backgroundColor: 'rgba(22, 163, 74, 1)' }}
@@ -828,7 +884,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                         className="flex items-center gap-2 px-8 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
                     >
                         <Save size={18} />
-                        <span>{editingId ? 'Update' : 'Save'}</span>
+                        <span>{editingId ? t('save') : t('save')}</span>
                     </motion.button>
                 </motion.div >
 
@@ -853,7 +909,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                     <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#18181b]">
                                         <h3 className="font-bold text-gray-200 flex items-center gap-2">
                                             <Settings size={18} className="text-gray-500" />
-                                            Settings
+                                            {t('settings')}
                                         </h3>
                                         <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
                                             <X size={18} />
@@ -862,11 +918,18 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
                                     <div className="p-6 space-y-6">
                                         <div className="space-y-4">
-                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Connection Settings</h4>
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">{t('language')}</h4>
+                                            <div className="w-full">
+                                                <LanguageSelect value={language} onChange={setLanguage} />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">{t('settings')}</h4>
 
                                             <div className="space-y-2.5">
                                                 <div className="flex justify-between text-sm text-gray-300">
-                                                    <span>Connection Timeout</span>
+                                                    <span>{language === 'zh' ? '连接超时' : 'Connection Timeout'}</span>
                                                     <span className="font-mono text-blue-400">{timeoutSec}s</span>
                                                 </div>
                                                 <input
@@ -878,7 +941,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                                     className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400"
                                                 />
                                                 <p className="text-[10px] text-gray-500">
-                                                    Timeout duration for database connection attempts (1-60 seconds).
+                                                    {t('timeout_desc')}
                                                 </p>
                                             </div>
                                         </div>
@@ -889,13 +952,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                             onClick={() => setShowSettings(false)}
                                             className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                                         >
-                                            Cancel
+                                            {t('cancel')}
                                         </button>
                                         <button
                                             onClick={saveSettings}
                                             className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                                         >
-                                            Save Changes
+                                            {t('save')}
                                         </button>
                                     </div>
                                 </motion.div>

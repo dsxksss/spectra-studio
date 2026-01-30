@@ -25,6 +25,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
 import { PostgresIcon } from './icons';
+import { useTranslation } from '../i18n/I18nContext';
 
 // Internal Confirm Dialog Component
 const ConfirmDialog = ({
@@ -46,6 +47,7 @@ const ConfirmDialog = ({
     cancelText?: string;
     isDestructive?: boolean;
 }) => {
+    const { t } = useTranslation();
     if (!isOpen) return null;
     return (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -66,7 +68,7 @@ const ConfirmDialog = ({
                         onClick={onCancel}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                     >
-                        {cancelText}
+                        {cancelText || t('cancel')}
                     </button>
                     <button
                         onClick={onConfirm}
@@ -75,7 +77,7 @@ const ConfirmDialog = ({
                             : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
                             }`}
                     >
-                        {confirmText}
+                        {confirmText || t('confirm')}
                     </button>
                 </div>
             </div>
@@ -84,6 +86,7 @@ const ConfirmDialog = ({
 };
 
 export default function PostgresManager({ onClose, onDisconnect, onDragStart, connectionName, config }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string, config?: any }) {
+    const { t } = useTranslation();
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
@@ -1052,7 +1055,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
             return (
                 <div className="flex flex-col items-center justify-center p-12 text-gray-500 gap-4">
                     <TableIcon size={48} className="opacity-20" />
-                    <p className="italic">No columns found for this table.</p>
+                    <p className="italic">{t('no_columns')}</p>
                 </div>
             );
         }
@@ -1062,7 +1065,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                 <div className="flex items-center gap-2 mb-3 px-1 text-xs text-gray-500 justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <TableIcon size={12} />
-                        <span>{(tableData as any[]).length} rows on this page</span>
+                        <span>{(tableData as any[]).length} {t('rows_on_page')}</span>
                     </div>
                     <div className="flex items-center gap-3">
                         {mode === 'edit' && (
@@ -1074,19 +1077,19 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                         className="flex items-center gap-1.5 px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded shadow-lg shadow-green-500/20 transition-all font-bold text-[10px] uppercase tracking-wider"
                                     >
                                         {isSaving ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />}
-                                        Save New Rows ({newRows.length})
+                                        {t('save_new_rows')} ({newRows.length})
                                     </button>
                                 )}
                                 <button
                                     onClick={handleAddRow}
                                     className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded border border-blue-500/20 transition-all font-medium text-[10px] uppercase tracking-wider"
                                 >
-                                    <Plus size={10} /> Add row
+                                    <Plus size={10} /> {t('add_row')}
                                 </button>
                             </div>
                         )}
-                        {primaryKey && mode === 'edit' && <span className="text-[10px] text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold tracking-wide">BATCH EDIT MODE • PK: {primaryKey}</span>}
-                        {primaryKey && mode === 'view' && <span className="text-[10px] text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">Read Only • PK: {primaryKey}</span>}
+                        {primaryKey && mode === 'edit' && <span className="text-[10px] text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold tracking-wide">{t('batch_edit_mode')} {primaryKey}</span>}
+                        {primaryKey && mode === 'view' && <span className="text-[10px] text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">{t('read_only')} {primaryKey}</span>}
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto border border-white/5 rounded-xl bg-[#121214] shadow-inner custom-scrollbar relative mx-0.5">
@@ -1120,8 +1123,8 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                     <td colSpan={columns.length + 1} className="px-4 py-12 text-center text-gray-600 italic">
                                         <div className="flex flex-col items-center gap-2 opacity-50">
                                             <Search size={24} />
-                                            <span>No records found</span>
-                                            {mode === 'view' && <span className="text-[10px] not-italic">Switch to Edit mode to add data</span>}
+                                            <span>{t('no_records_found')}</span>
+                                            {mode === 'view' && <span className="text-[10px] not-italic">{t('switch_to_edit_mode')}</span>}
                                         </div>
                                     </td>
                                 </tr>
@@ -1134,7 +1137,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                         <button
                                             onClick={() => removeNewRow(i)}
                                             className="hidden group-hover:flex items-center justify-center absolute inset-0 bg-red-500 text-white"
-                                            title="Remove row"
+                                            title={t('remove_row')}
                                         >
                                             <X size={12} />
                                         </button>
@@ -1147,7 +1150,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                     type="text"
                                                     value={row[col] || ""}
                                                     onChange={(e) => handleNewRowChange(i, col, e.target.value)}
-                                                    placeholder={`Enter ${col}...`}
+                                                    placeholder={`${t('enter_value_placeholder')} ${col}`}
                                                     className="w-full h-full px-4 py-2 bg-transparent outline-none text-sm text-green-200 focus:bg-white/5 transition-colors placeholder:text-green-900/50"
                                                 />
                                             </td>
@@ -1195,7 +1198,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                             ${isPK ? 'text-gray-600 cursor-not-allowed select-none bg-black/20 italic' : 'text-gray-300 focus:text-white focus:bg-white/5'}
                                                             ${isDirty ? 'text-amber-200 font-medium' : ''}
                                                         `}
-                                                        title={isPK ? "Primary Key (Cannot Edit)" : String(val)}
+                                                        title={isPK ? t('pk_cannot_edit') : String(val)}
                                                     />
                                                     {isDirty && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-amber-500 rounded-full m-1" />}
                                                 </td>
@@ -1246,7 +1249,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={16} />
                         <input
                             type="text"
-                            placeholder="Search tables..."
+                            placeholder={t('search_placeholder')}
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -1262,13 +1265,13 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                             onClick={() => { setActiveView('console'); setSelectedKey(null); }}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all ${activeView === 'console' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-[#18181b] text-gray-400 hover:text-white border border-white/5'}`}
                         >
-                            <Terminal size={14} /> SQL Console
+                            <Terminal size={14} /> {t('sql_console')}
                         </button>
                         <button
                             onClick={() => { setActiveView('create-table'); setSelectedKey(null); }}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all ${activeView === 'create-table' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-[#18181b] text-gray-400 hover:text-white border border-white/5'}`}
                         >
-                            <Plus size={14} /> New Table
+                            <Plus size={14} /> {t('create_table')}
                         </button>
                     </div>
                 </div>
@@ -1285,7 +1288,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
                     {databases.length === 0 && !isLoading ? (
                         <div className="flex flex-col items-center justify-center h-48 opacity-60">
-                            <span className="text-sm text-gray-500 mb-3">No databases found</span>
+                            <span className="text-sm text-gray-500 mb-3">{t('no_databases')}</span>
                         </div>
                     ) : (
                         <>
@@ -1332,7 +1335,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 >
                                                     {expandedFolders.has('tables') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                                     {keys.length > 0 ? <FolderOpen size={12} /> : <Folder size={12} />}
-                                                    <span>Tables ({keys.length})</span>
+                                                    <span>{t('tables')} ({keys.length})</span>
                                                 </button>
                                                 {expandedFolders.has('tables') && keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
                                                     <div
@@ -1354,7 +1357,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
                                                             className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
-                                                            title="Drop Table"
+                                                            title={t('delete')}
                                                         >
                                                             <Trash2 size={10} />
                                                         </button>
@@ -1368,7 +1371,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 >
                                                     {expandedFolders.has('views') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                                     <Eye size={12} />
-                                                    <span>Views ({views.length})</span>
+                                                    <span>{t('views')} ({views.length})</span>
                                                 </button>
                                                 {expandedFolders.has('views') && views.map(view => (
                                                     <div key={view} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
@@ -1384,7 +1387,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 >
                                                     {expandedFolders.has('functions') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                                     <Hash size={12} />
-                                                    <span>Functions ({functions.length})</span>
+                                                    <span>{t('functions')} ({functions.length})</span>
                                                 </button>
                                                 {expandedFolders.has('functions') && functions.map(func => (
                                                     <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
@@ -1400,7 +1403,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 >
                                                     {expandedFolders.has('procedures') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                                     <Terminal size={12} />
-                                                    <span>Procedures ({procedures.length})</span>
+                                                    <span>{t('procedures')} ({procedures.length})</span>
                                                 </button>
                                                 {expandedFolders.has('procedures') && procedures.map(proc => (
                                                     <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
@@ -1429,7 +1432,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                     >
                                         {expandedFolders.has('__system__') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                         <Folder size={12} />
-                                        <span>System Databases ({databases.filter(db => SYSTEM_DATABASES.includes(db.toLowerCase())).length})</span>
+                                        <span>{t('system_databases')} ({databases.filter(db => SYSTEM_DATABASES.includes(db.toLowerCase())).length})</span>
                                     </button>
 
                                     {expandedFolders.has('__system__') && databases
@@ -1466,20 +1469,20 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
                     <div className="flex items-center gap-2">
-                        <span>{databases.filter(db => !SYSTEM_DATABASES.includes(db.toLowerCase())).length} Databases · {keys.length} Tables</span>
+                        <span>{databases.filter(db => !SYSTEM_DATABASES.includes(db.toLowerCase())).length} {t('database')} · {keys.length} {t('tables')}</span>
                         <button
                             onClick={() => setShowSystemDatabases(!showSystemDatabases)}
                             className={`text-[10px] px-2 py-0.5 rounded transition-colors ${showSystemDatabases ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500 hover:text-gray-400'}`}
-                            title={showSystemDatabases ? "Hide system databases" : "Show system databases"}
+                            title={showSystemDatabases ? t('system_databases') : t('system_databases')}
                         >
                             {showSystemDatabases ? 'sys ✓' : 'sys'}
                         </button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => { fetchDatabases(); fetchKeys(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
+                        <button onClick={() => { fetchDatabases(); fetchKeys(); }} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title={t('reload')}>
                             <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
                         </button>
-                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title={t('disconnect')}>
                             <LogOut size={14} />
                         </button>
                     </div>
@@ -1492,7 +1495,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Table</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('current_table')}</span>
                                 {isRenamingKey === selectedKey ? (
                                     <input
                                         autoFocus
@@ -1514,7 +1517,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 setRenamedKeyName(selectedKey);
                                             }}
                                             className="p-1 hover:bg-white/5 rounded text-gray-500 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
-                                            title="Rename Table"
+                                            title={t('rename_key')}
                                         >
                                             <Pencil size={12} />
                                         </button>
@@ -1523,16 +1526,16 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                             </div>
                         ) : activeView === 'console' ? (
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Interactive</span>
-                                <span className="text-white font-medium truncate text-lg">SQL Console</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('interactive')}</span>
+                                <span className="text-white font-medium truncate text-lg">{t('sql_console')}</span>
                             </div>
                         ) : activeView === 'create-table' ? (
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Structural</span>
-                                <span className="text-white font-medium truncate text-lg">New Table</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('structural')}</span>
+                                <span className="text-white font-medium truncate text-lg">{t('create_table')}</span>
                             </div>
                         ) : (
-                            <span className="text-gray-500 text-sm">Select a table to view data</span>
+                            <span className="text-gray-500 text-sm">{t('select_table')}</span>
                         )}
                     </div>
 
@@ -1544,13 +1547,13 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                     onClick={requestOutMode}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <Eye size={12} /> View
+                                    <Eye size={12} /> {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'edit' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <Pencil size={12} /> Edit
+                                    <Pencil size={12} /> {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1564,7 +1567,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                         className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-md text-xs font-medium flex items-center gap-1.5 border border-white/5 transition-all mr-1"
                                         title="Undo last change"
                                     >
-                                        <RotateCcw size={12} className="scale-x-[-1]" /> Undo
+                                        <RotateCcw size={12} className="scale-x-[-1]" /> {t('undo')}
                                     </button>
                                 )}
                                 <button
@@ -1573,13 +1576,13 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                     className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-green-500/20 transition-all"
                                 >
                                     {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-                                    Save ({changeCount})
+                                    {t('save')} ({changeCount})
                                 </button>
                                 <button
                                     onClick={requestDiscard}
                                     className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md text-xs font-medium flex items-center gap-1.5 border border-red-500/10 transition-all"
                                 >
-                                    <RotateCcw size={12} /> Discard
+                                    <RotateCcw size={12} /> {t('discard')}
                                 </button>
                             </div>
                         )}
@@ -1603,7 +1606,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                             <div className="flex-1 flex flex-col min-h-0 bg-[#121214] border border-white/5 rounded-xl shadow-inner overflow-hidden p-1">
                                 {isLoading ? (
                                     <div className="flex items-center justify-center h-full text-blue-400 gap-2">
-                                        <RefreshCw className="animate-spin" /> Loading data...
+                                        <RefreshCw className="animate-spin" /> {t('loading')}
                                     </div>
                                 ) : (
                                     <>
@@ -1614,7 +1617,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                         {/* Pagination Footer */}
                                         <div className="flex items-center justify-between px-4 py-3 border-t border-white/5 bg-[#18181b] shrink-0">
                                             <div className="text-xs text-gray-500">
-                                                Showing <span className="text-gray-300 font-mono">{((page - 1) * pageSize) + 1}</span> - <span className="text-gray-300 font-mono">{Math.min(page * pageSize, totalRows)}</span> of <span className="text-gray-300 font-mono">{totalRows}</span> rows
+                                                {t('showing')} <span className="text-gray-300 font-mono">{((page - 1) * pageSize) + 1}</span> - <span className="text-gray-300 font-mono">{Math.min(page * pageSize, totalRows)}</span> {t('of')} <span className="text-gray-300 font-mono">{totalRows}</span> {t('rows')}
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <button
@@ -1627,7 +1630,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                 </button>
 
                                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                                    <span>Page</span>
+                                                    <span>{t('page')}</span>
                                                     <input
                                                         type="text"
                                                         value={pageInput}
@@ -1636,7 +1639,7 @@ export default function PostgresManager({ onClose, onDisconnect, onDragStart, co
                                                         onBlur={handlePageInputSubmit}
                                                         className="w-10 bg-[#27272a] border border-white/10 rounded px-1 py-0.5 text-center text-white focus:border-blue-500 outline-none transition-colors"
                                                     />
-                                                    <span>of {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
+                                                    <span>{t('of')} {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
                                                 </div>
 
                                                 <button

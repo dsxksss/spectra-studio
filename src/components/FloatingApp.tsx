@@ -35,7 +35,10 @@ const UI_SIZES = {
 
 const ANIMATION_DURATION = 300;
 
+import { useTranslation } from '../i18n/I18nContext';
+
 export default function FloatingApp() {
+    const { t } = useTranslation();
     const [viewMode, setViewMode] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [connectedService, setConnectedService] = useState<string | null>(null);
     const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
@@ -298,7 +301,7 @@ export default function FloatingApp() {
                         >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 {getServiceIcon(connectedService)}
-                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : 'Connect'}</span>
+                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : t('connect')}</span>
                             </div>
 
                             {

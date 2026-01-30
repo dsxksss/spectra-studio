@@ -24,6 +24,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
 import { RedisIcon } from './icons';
+import { useTranslation } from '../i18n/I18nContext';
 
 // Internal Confirm Dialog Component
 const ConfirmDialog = ({
@@ -45,6 +46,7 @@ const ConfirmDialog = ({
     cancelText?: string;
     isDestructive?: boolean;
 }) => {
+    const { t } = useTranslation();
     if (!isOpen) return null;
     return (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -65,7 +67,7 @@ const ConfirmDialog = ({
                         onClick={onCancel}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                     >
-                        {cancelText}
+                        {cancelText || t('cancel')}
                     </button>
                     <button
                         onClick={onConfirm}
@@ -74,7 +76,7 @@ const ConfirmDialog = ({
                             : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
                             }`}
                     >
-                        {confirmText}
+                        {confirmText || t('confirm')}
                     </button>
                 </div>
             </div>
@@ -83,6 +85,7 @@ const ConfirmDialog = ({
 };
 
 export default function RedisManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose: () => void, onDisconnect: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+    const { t } = useTranslation();
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [, setKeyValue] = useState<string>(""); // Raw string from Redis
@@ -570,7 +573,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
             return (
                 <div className="flex flex-col items-center justify-center h-64 text-gray-500 animate-pulse">
                     <RedisIcon size={32} className="mb-4 opacity-50" />
-                    <p className="text-sm font-medium">Loading data...</p>
+                    <p className="text-sm font-medium">{t('loading')}</p>
                 </div>
             );
         }
@@ -591,7 +594,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                         <Key size={32} className="opacity-50" />
                     </div>
                     <p className="text-lg font-medium text-gray-400">No Key Selected</p>
-                    <p className="text-sm">Select a key from the sidebar to view value</p>
+                    <p className="text-sm">{t('select_key')}</p>
                 </div>
             );
         }
@@ -675,8 +678,8 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                                 <Plus size={32} />
                                             </div>
                                             <div>
-                                                <p className="text-gray-300 font-medium text-lg not-italic">Key is Empty</p>
-                                                <p className="text-sm not-italic text-gray-500">Choose how you want to add data to <span className="text-blue-400 font-mono">{selectedKey}</span></p>
+                                                <p className="text-gray-300 font-medium text-lg not-italic">{t('key_is_empty')}</p>
+                                                <p className="text-sm not-italic text-gray-500">{t('choose_add_method')} <span className="text-blue-400 font-mono">{selectedKey}</span></p>
                                             </div>
                                             <div className="flex items-center gap-3 mt-2">
                                                 <button
@@ -686,7 +689,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                                     }}
                                                     className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
                                                 >
-                                                    Add String/Value
+                                                    {t('add_string')}
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -695,7 +698,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                                     }}
                                                     className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
                                                 >
-                                                    Add Hash (Key/Value)
+                                                    {t('add_hash')}
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -704,7 +707,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                                     }}
                                                     className="px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl text-sm transition-all flex items-center gap-2"
                                                 >
-                                                    Add List Item
+                                                    {t('add_list_item')}
                                                 </button>
                                             </div>
                                         </div>
@@ -868,7 +871,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" size={14} />
                         <input
                             type="text"
-                            placeholder="Filter keys..."
+                            placeholder={t('search_placeholder')}
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -881,20 +884,20 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                             onClick={() => { setActiveView('browser'); setSelectedKey(keys[0] || null); }}
                             className={`flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${activeView === 'browser' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-white/5 text-gray-400 hover:text-gray-200 hover:border-white/10'}`}
                         >
-                            <Activity size={12} /> Browser
+                            <Activity size={12} /> {t('browser')}
                         </button>
                         <button
                             onClick={() => setActiveView('console')}
                             className={`flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${activeView === 'console' ? 'bg-red-500/10 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-white/5 border-white/5 text-gray-400 hover:text-gray-200 hover:border-white/10'}`}
                         >
-                            <Terminal size={12} /> Console
+                            <Terminal size={12} /> {t('sql_console')}
                         </button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="px-2 py-2 space-y-0.5">
                         {keys.length === 0 && !isLoading ? (
-                            <div className="text-center py-8 text-gray-600 text-xs">No keys found</div>
+                            <div className="text-center py-8 text-gray-600 text-xs">{t('no_data')}</div>
                         ) : (
                             keys.map(key => (
                                 <div
@@ -909,7 +912,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleDeleteKey(key); }}
                                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
-                                        title="Delete Key"
+                                        title={t('delete_key')}
                                     >
                                         <Trash2 size={12} />
                                     </button>
@@ -920,12 +923,12 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                 </div>
                 {/* Footer Actions */}
                 <div className="p-3 border-t border-white/5 flex items-center justify-between text-xs bg-[#0c0c0e]/50">
-                    <span className="text-gray-500 font-mono">{keys.length} Keys</span>
+                    <span className="text-gray-500 font-mono">{keys.length} {t('keys')}</span>
                     <div className="flex items-center gap-1">
-                        <button onClick={fetchKeys} className="p-1.5 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors" title="Refresh">
+                        <button onClick={fetchKeys} className="p-1.5 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors" title={t('reload')}>
                             <RefreshCw size={14} />
                         </button>
-                        <button onClick={onDisconnect} className="p-1.5 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors" title="Disconnect">
+                        <button onClick={onDisconnect} className="p-1.5 hover:bg-red-500/10 rounded text-gray-400 hover:text-red-400 transition-colors" title={t('disconnect')}>
                             <LogOut size={14} />
                         </button>
                     </div>
@@ -939,7 +942,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Key</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('current_key')}</span>
                                 {isRenamingKey === selectedKey ? (
                                     <input
                                         autoFocus
@@ -997,14 +1000,14 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     onClick={() => setPendingChanges({})}
                                     className="px-3 py-1.5 hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-md text-xs font-medium transition-colors"
                                 >
-                                    Discard
+                                    {t('discard')}
                                 </button>
                                 <button
                                     onClick={requestSave}
                                     disabled={isSaving}
                                     className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-green-500/20 transition-all"
                                 >
-                                    {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                    {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} {t('save')}
                                 </button>
                             </div>
                         )}
@@ -1015,13 +1018,13 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     onClick={() => { setMode('view'); setPendingChanges({}); }}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'view' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Eye size={14} /> View
+                                    <Eye size={14} /> {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${mode === 'edit' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-300'}`}
                                 >
-                                    <Pencil size={14} /> Edit
+                                    <Pencil size={14} /> {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1038,12 +1041,12 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                     <div className="flex items-center gap-4">
                         {selectedKey && (
                             <>
-                                <span>Rows: <span className="text-gray-300">{parsedData.length}</span></span>
+                                <span>{t('rows')}: <span className="text-gray-300">{parsedData.length}</span></span>
                                 {selectedKeyTTL !== null && (
                                     <span className="flex items-center gap-1.5">
                                         <Clock size={10} className="text-blue-500/70" />
                                         TTL: <span className={selectedKeyTTL === -1 ? 'text-gray-300' : 'text-amber-400'}>
-                                            {selectedKeyTTL === -1 ? '∞ (Persistent)' : `${selectedKeyTTL}s`}
+                                            {selectedKeyTTL === -1 ? `∞ (${t('persistent')})` : `${selectedKeyTTL}s`}
                                         </span>
                                     </span>
                                 )}
@@ -1077,14 +1080,14 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                     <Plus size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-white tracking-tight">Create New Key</h3>
+                                    <h3 className="text-xl font-bold text-white tracking-tight">{t('create_key')}</h3>
                                     <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mt-0.5">Redis Database</p>
                                 </div>
                             </div>
 
                             <div className="space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Key Name</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">{t('key_name')}</label>
                                     <input
                                         autoFocus
                                         type="text"
@@ -1096,7 +1099,7 @@ export default function RedisManager({ onClose, onDisconnect, onDragStart, conne
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Key Type</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">{t('type')}</label>
                                     <div className="grid grid-cols-4 gap-2">
                                         {(['string', 'hash', 'list', 'set'] as const).map(type => (
                                             <button

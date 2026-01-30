@@ -21,6 +21,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { Toast, ToastType } from './Toast';
 import { SQLiteIcon } from './icons';
+import { useTranslation } from '../i18n/I18nContext';
 
 // Internal Confirm Dialog Component
 const ConfirmDialog = ({
@@ -42,6 +43,7 @@ const ConfirmDialog = ({
     cancelText?: string;
     isDestructive?: boolean;
 }) => {
+    const { t } = useTranslation();
     if (!isOpen) return null;
     return (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -62,7 +64,7 @@ const ConfirmDialog = ({
                         onClick={onCancel}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                     >
-                        {cancelText}
+                        {cancelText || t('cancel')}
                     </button>
                     <button
                         onClick={onConfirm}
@@ -71,7 +73,7 @@ const ConfirmDialog = ({
                             : 'bg-cyan-500 hover:bg-cyan-600 shadow-cyan-500/20'
                             }`}
                     >
-                        {confirmText}
+                        {confirmText || t('confirm')}
                     </button>
                 </div>
             </div>
@@ -80,6 +82,7 @@ const ConfirmDialog = ({
 };
 
 export default function SQLiteManager({ onClose, onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+    const { t } = useTranslation();
     const [keys, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [keyValue, setKeyValue] = useState<string>("");
@@ -1060,7 +1063,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-cyan-500 transition-colors" size={16} />
                         <input
                             type="text"
-                            placeholder="Search tables..."
+                            placeholder={t('search_placeholder')}
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -1076,13 +1079,13 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                             onClick={() => { setActiveView('console'); setSelectedKey(null); }}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all ${activeView === 'console' ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-[#18181b] text-gray-400 hover:text-white border border-white/5'}`}
                         >
-                            <Terminal size={14} /> SQL Console
+                            <Terminal size={14} /> {t('sql_console')}
                         </button>
                         <button
                             onClick={() => { setActiveView('create-table'); setSelectedKey(null); }}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all ${activeView === 'create-table' ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-[#18181b] text-gray-400 hover:text-white border border-white/5'}`}
                         >
-                            <Plus size={14} /> New Table
+                            <Plus size={14} /> {t('create_table')}
                         </button>
                     </div>
                 </div>
@@ -1099,7 +1102,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
                     {keys.length === 0 && !isLoading ? (
                         <div className="flex flex-col items-center justify-center h-48 opacity-60">
-                            <span className="text-sm text-gray-500 mb-3">No tables found</span>
+                            <span className="text-sm text-gray-500 mb-3">{t('no_tables')}</span>
                         </div>
                     ) : (
                         keys.filter(k => k.toLowerCase().includes(filter.toLowerCase())).map(key => (
@@ -1121,7 +1124,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleDropTable(key); }}
                                         className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-colors"
-                                        title="Drop Table"
+                                        title={t('delete')}
                                     >
                                         <Trash2 size={12} />
                                     </button>
@@ -1134,12 +1137,12 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-gray-500 bg-[#0c0c0e]/50">
-                    <span>{keys.length} Tables</span>
+                    <span>{keys.length} {t('tables')}</span>
                     <div className="flex items-center gap-2">
-                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title="Refresh">
+                        <button onClick={fetchKeys} className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors p-1" title={t('reload')}>
                             <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
                         </button>
-                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title="Disconnect">
+                        <button onClick={onDisconnect} className="flex items-center gap-2 text-gray-500 hover:text-red-400 transition-colors p-1" title={t('disconnect')}>
                             <LogOut size={14} />
                         </button>
                     </div>
@@ -1152,7 +1155,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                     <div className="flex items-center gap-4 overflow-hidden">
                         {activeView === 'browser' && selectedKey ? (
                             <div className="flex flex-col group">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Table</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('current_table')}</span>
                                 {isRenamingKey === selectedKey ? (
                                     <input
                                         autoFocus
@@ -1174,7 +1177,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                                 setRenamedKeyName(selectedKey);
                                             }}
                                             className="p-1 hover:bg-white/5 rounded text-gray-500 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
-                                            title="Rename Table"
+                                            title={t('rename_key')}
                                         >
                                             <Pencil size={12} />
                                         </button>
@@ -1183,16 +1186,16 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                             </div>
                         ) : activeView === 'console' ? (
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Interactive</span>
-                                <span className="text-white font-medium truncate text-lg">SQL Console</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('interactive')}</span>
+                                <span className="text-white font-medium truncate text-lg">{t('sql_console')}</span>
                             </div>
                         ) : activeView === 'create-table' ? (
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Structural</span>
-                                <span className="text-white font-medium truncate text-lg">New Table</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('structural')}</span>
+                                <span className="text-white font-medium truncate text-lg">{t('create_table')}</span>
                             </div>
                         ) : (
-                            <span className="text-gray-500 text-sm">Select a table to view data</span>
+                            <span className="text-gray-500 text-sm">{t('select_table')}</span>
                         )}
                     </div>
 
@@ -1203,13 +1206,13 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                     onClick={requestOutMode}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'view' ? 'bg-cyan-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <Eye size={12} /> View
+                                    <Eye size={12} /> {t('views')}
                                 </button>
                                 <button
                                     onClick={() => setMode('edit')}
                                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === 'edit' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <Pencil size={12} /> Edit
+                                    <Pencil size={12} /> {t('edit')}
                                 </button>
                             </div>
                         )}
@@ -1222,7 +1225,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                         className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-md text-xs font-medium flex items-center gap-1.5 border border-white/5 transition-all mr-1"
                                         title="Undo last change"
                                     >
-                                        <RotateCcw size={12} className="scale-x-[-1]" /> Undo
+                                        <RotateCcw size={12} className="scale-x-[-1]" /> {t('undo')}
                                     </button>
                                 )}
                                 <button
@@ -1231,13 +1234,13 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                     className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-500/50 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-green-500/20 transition-all"
                                 >
                                     {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-                                    Save ({changeCount})
+                                    {t('save')} ({changeCount})
                                 </button>
                                 <button
                                     onClick={requestDiscard}
                                     className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md text-xs font-medium flex items-center gap-1.5 border border-red-500/10 transition-all"
                                 >
-                                    <RotateCcw size={12} /> Discard
+                                    <RotateCcw size={12} /> {t('discard')}
                                 </button>
                             </div>
                         )}
@@ -1261,7 +1264,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                             <div className="flex-1 flex flex-col min-h-0 bg-[#121214] border border-white/5 rounded-xl shadow-inner overflow-hidden p-1">
                                 {isLoading ? (
                                     <div className="flex items-center justify-center h-full text-cyan-400 gap-2">
-                                        <RefreshCw className="animate-spin" /> Loading data...
+                                        <RefreshCw className="animate-spin" /> {t('loading')}
                                     </div>
                                 ) : (
                                     <>
@@ -1272,7 +1275,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                         {/* Pagination Footer - Basic */}
                                         <div className="flex items-center justify-between px-4 py-3 border-t border-white/5 bg-[#18181b] shrink-0">
                                             <div className="text-xs text-gray-500">
-                                                Showing <span className="text-gray-300 font-mono">{((page - 1) * pageSize) + 1}</span> - <span className="text-gray-300 font-mono">{Math.min(page * pageSize, totalRows)}</span> of <span className="text-gray-300 font-mono">{totalRows}</span> rows
+                                                {t('showing')} <span className="text-gray-300 font-mono">{((page - 1) * pageSize) + 1}</span> - <span className="text-gray-300 font-mono">{Math.min(page * pageSize, totalRows)}</span> {t('of')} <span className="text-gray-300 font-mono">{totalRows}</span> {t('rows')}
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <button
@@ -1285,7 +1288,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                                 </button>
 
                                                 <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                                    <span>Page</span>
+                                                    <span>{t('page')}</span>
                                                     <input
                                                         type="text"
                                                         value={pageInput}
@@ -1294,7 +1297,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                                         onBlur={handlePageInputSubmit}
                                                         className="w-10 bg-[#27272a] border border-white/10 rounded px-1 py-0.5 text-center text-white focus:border-cyan-500 outline-none transition-colors"
                                                     />
-                                                    <span>of {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
+                                                    <span>{t('of')} {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
                                                 </div>
 
                                                 <button
@@ -1315,7 +1318,7 @@ export default function SQLiteManager({ onClose, onDisconnect, onDragStart, conn
                                 <div className="w-24 h-24 rounded-3xl bg-white/5 flex items-center justify-center border border-white/5">
                                     <TableIcon size={48} className="text-gray-500" />
                                 </div>
-                                <p className="text-lg font-medium text-gray-500">Pick a table from the sidebar</p>
+                                <p className="text-lg font-medium text-gray-500">{t('select_table')}</p>
                             </div>
                         )
                     ) : activeView === 'console' ? (
