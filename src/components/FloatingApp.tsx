@@ -196,26 +196,18 @@ export default function FloatingApp() {
         }
     };
 
-    const getServiceColor = (service: string | null) => {
-        if (!service) return '#94a3b8'; // text-slate-400
-        switch (service) {
-            case 'Redis': return '#f87171'; // text-red-400
-            case 'PostgreSQL': return '#60a5fa'; // text-blue-400
-            case 'MySQL': return '#3b82f6'; // text-blue-500
-            case 'MongoDB': return '#10b981'; // text-emerald-500
-            case 'SQLite': return '#93c5fd'; // text-blue-300
-            default: return '#60a5fa';
-        }
+    const getServiceColor = () => {
+        return "gray";
     };
 
     const getServiceIcon = (service: string | null, size = 18) => {
-        if (!service) return <Database size={size} />;
+        if (!service) return <Database size={size} className="text-gray-400" />;
         switch (service) {
             case 'Redis': return <RedisIcon size={size} className="text-red-400" />;
             case 'PostgreSQL': return <PostgresIcon size={size} className="text-blue-400" />;
-            case 'MySQL': return <MySQLIcon size={size} className="text-blue-500" />;
-            case 'MongoDB': return <MongoIcon size={size} />;
-            case 'SQLite': return <SQLiteIcon size={size} className="text-blue-300" />;
+            case 'MySQL': return <MySQLIcon size={size} className="text-orange-400" />;
+            case 'MongoDB': return <MongoIcon size={size} className="text-green-400" />;
+            case 'SQLite': return <SQLiteIcon size={size} className="text-cyan-400" />;
             default: return <Database size={size} className="text-blue-400" />;
         }
     };
@@ -228,7 +220,7 @@ export default function FloatingApp() {
                         <div className="absolute inset-0 cursor-move" onPointerDown={handleDragStart} />
                         <div
                             data-draggable="true"
-                            className={`z-10 w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${connectedService ? 'bg-white/5 border border-white/10' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}
+                            className={`z-10 w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-transform hover:scale-110 active:scale-90 ${connectedService ? 'bg-white/5 border border-white/10' : 'bg-gray-600'}`}
                             onPointerDown={handleDragStart}
                             onClick={() => {
                                 if (!isActuallyDragging()) {
@@ -301,7 +293,7 @@ export default function FloatingApp() {
                         >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 {getServiceIcon(connectedService)}
-                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor(connectedService) }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : t('connect')}</span>
+                                <span className="text-sm font-medium truncate flex-1 text-left" style={{ color: getServiceColor() }} title={currentConnectionName || ''}>{connectedService ? (currentConnectionName || connectedService) : t('connect')}</span>
                             </div>
 
                             {
