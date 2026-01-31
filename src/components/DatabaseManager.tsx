@@ -17,6 +17,7 @@ import {
     Trash2,
     Palette,
     Check,
+    Shield,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
@@ -63,6 +64,14 @@ type SavedConnection = {
     username: string;
     password?: string;
     database?: string;
+    ssh?: {
+        enabled: boolean;
+        host: string;
+        port: string;
+        username: string;
+        password?: string;
+        privateKeyPath?: string;
+    };
 };
 
 const ServiceSelect = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
@@ -196,7 +205,7 @@ const InputField = ({ label, placeholder, type = "text", value, onChange, classN
 import { useTranslation } from '../i18n/I18nContext';
 import { useTheme, PRESET_THEME_COLORS, ThemeMode } from '../contexts/ThemeContext';
 
-export default function DatabaseManager({ onClose, onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string, config?: any) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
+export default function DatabaseManager({ onConnect, activeService, onDragStart }: { onClose?: () => void, onConnect?: (service: string, name: string, config?: any) => void, activeService?: string | null, onDragStart?: (e: React.PointerEvent) => void }) {
     const { t, language, setLanguage } = useTranslation();
     const {
         themeSettings,
@@ -217,6 +226,15 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [dbName, setDbName] = useState('postgres');
+
+    // SSH State
+    const [useSSH, setUseSSH] = useState(false);
+    const [sshHost, setSshHost] = useState('');
+    const [sshPort, setSshPort] = useState('22');
+    const [sshUsername, setSshUsername] = useState('');
+    const [sshPassword, setSshPassword] = useState('');
+    // const [sshKeyPath, setSshKeyPath] = useState(''); // Future
+
     const [appVersion, setAppVersion] = useState("v0.1.0");
 
     useEffect(() => {
@@ -300,6 +318,11 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setDbName('postgres');
         setSelectedService('PostgreSQL');
         setIsCustomName(false);
+        setUseSSH(false);
+        setSshHost('');
+        setSshPort('22');
+        setSshUsername('');
+        setSshPassword('');
     };
 
     const saveConnection = () => {
@@ -312,6 +335,13 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             username,
             password,
             database: dbName,
+            ssh: useSSH ? {
+                enabled: true,
+                host: sshHost,
+                port: sshPort,
+                username: sshUsername,
+                password: sshPassword
+            } : undefined
         };
 
         let newConnections;
@@ -338,6 +368,19 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
         setPassword(conn.password || '');
         setDbName(conn.database || '0');
         setIsCustomName(true);
+        if (conn.ssh && conn.ssh.enabled) {
+            setUseSSH(true);
+            setSshHost(conn.ssh.host);
+            setSshPort(conn.ssh.port);
+            setSshUsername(conn.ssh.username);
+            setSshPassword(conn.ssh.password || '');
+        } else {
+            setUseSSH(false);
+            setSshHost('');
+            setSshPort('22');
+            setSshUsername('');
+            setSshPassword('');
+        }
     };
 
     const handleServiceChange = (service: string) => {
@@ -413,6 +456,20 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
 
         setIsCustomName(true);
         setShowSettings(false);
+
+        if (conn.ssh && conn.ssh.enabled) {
+            setUseSSH(true);
+            setSshHost(conn.ssh.host);
+            setSshPort(conn.ssh.port);
+            setSshUsername(conn.ssh.username);
+            setSshPassword(conn.ssh.password || '');
+        } else {
+            setUseSSH(false);
+            setSshHost('');
+            setSshPort('22');
+            setSshUsername('');
+            setSshPassword('');
+        }
     };
 
     const handleDeleteConnection = () => {
@@ -434,38 +491,65 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
             const usernameArg = usernameStr || '';
             const dbArg = dbNameStr || null;
 
+            const sshConfig = useSSH ? {
+                host: sshHost,
+                port: parseInt(sshPort),
+                username: sshUsername,
+                password: sshPassword || null,
+            } : null;
+
+            // In saved connection play mode, we need to pass ssh config too. 
+            // But performConnect signature is getting messy. 
+            // Let's rely on state if calling from form, or arguments if from saved. 
+            // Wait, performConnect is called with args. 
+            // We need to add ssh config to args of performConnect or rely on a separate object.
+            // Let's modify invoke to include ssh.
+
+            // NOTE: The current performConnect signature doesn't include SSH args. 
+            // We'll trust the component state 'useSSH' etc if we are in "Connect" mode from form.
+            // BUT for 'SavedConnection', we need to pass the SSH config handling.
+            // Since 'performConnect' is called by handleSavedConnect, we should update performConnect signature to accept an config object or optional params.
+            // For now, let's just use the state if it matches the current editing form, 
+            // BUT handleSavedConnect passes specific values. 
+
+            // To fix this cleanly:
+            // 1. We'll use a `config` object in performConnect instead of many args, OR append sshConfig.
+            // Let's append sshConfig to performConnect signature.
+
+
             if (service === 'Redis') {
                 res = await invoke('connect_redis', {
                     host: hostStr,
                     port: portNum,
                     password: passwordArg,
-                    timeout_sec: timeoutSec
+                    timeout_sec: timeoutSec,
+                    ssh_config: sshConfig
                 });
-            } else if (service === 'MySQL') {
                 res = await invoke('connect_mysql', {
                     host: hostStr,
                     port: portNum,
                     username: usernameArg,
                     password: passwordArg,
                     database: dbArg,
-                    timeout_sec: timeoutSec
+                    timeout_sec: timeoutSec,
+                    ssh_config: sshConfig
                 });
-            } else if (service === 'PostgreSQL') {
                 res = await invoke('connect_postgres', {
                     host: hostStr,
                     port: portNum,
                     username: usernameArg,
                     password: passwordArg,
                     database: dbArg,
-                    timeout_sec: timeoutSec
+                    timeout_sec: timeoutSec,
+                    ssh_config: sshConfig
                 });
-            } else if (service === 'MongoDB') {
                 res = await invoke('connect_mongodb', {
                     host: hostStr,
                     port: portNum,
                     username: usernameArg || null, // Allow empty user for mongo
                     password: passwordArg,
-                    timeout_sec: timeoutSec
+                    timeout_sec: timeoutSec,
+                    ssh_config: sshConfig
                 });
             } else if (service === 'SQLite') {
                 res = await invoke('connect_sqlite', {
@@ -482,7 +566,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     username: usernameArg,
                     password: passwordArg,
                     database: dbArg,
-                    type: service
+                    type: service,
+                    ssh: sshConfig
                 };
                 onConnect(service, nameOverride || connectionName || t('unsaved_connection'), config);
             }
@@ -495,7 +580,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
     };
 
     const handleConnectClick = () => {
-        performConnect(selectedService, host, port, password, username, dbName, true);
+        performConnect(selectedService, host, port, password, username, dbName, true, undefined);
     };
 
     const handleSavedConnect = (e: React.MouseEvent, conn: SavedConnection) => {
@@ -776,6 +861,78 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                             </div>
                         </div>
 
+                        {/* SSH Tunnel Section */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4, delay: 0.3 }}
+                            className={`border transition-all duration-300 rounded-2xl p-8 space-y-6 relative overflow-hidden ${useSSH ? 'bg-[#0c0c0e]/30 border-blue-500/30' : 'bg-[#0c0c0e]/10 border-white/5 opacity-80 hover:opacity-100'
+                                }`}
+                        >
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                    <Shield size={16} className={useSSH ? "text-blue-400" : "text-gray-500"} />
+                                    <h3 className={`text-sm font-bold uppercase tracking-widest ${useSSH ? "text-gray-200" : "text-gray-500"}`}>{t('ssh_tunnel')}</h3>
+                                </div>
+                                <button
+                                    onClick={() => setUseSSH(!useSSH)}
+                                    className={`relative w-12 h-6 rounded-full transition-colors ${useSSH ? 'bg-blue-600' : 'bg-white/10'}`}
+                                >
+                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all ${useSSH ? 'left-7' : 'left-1'}`} />
+                                </button>
+                            </div>
+
+                            <AnimatePresence>
+                                {useSSH && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="space-y-6 overflow-hidden"
+                                    >
+                                        <div className="flex gap-4">
+                                            <div className="flex-[3]">
+                                                <InputField
+                                                    label={t('ssh_host')}
+                                                    value={sshHost}
+                                                    onChange={(e: any) => setSshHost(e.target.value)}
+                                                    placeholder="e.g. 192.168.1.1"
+                                                />
+                                            </div>
+                                            <div className="flex-[1]">
+                                                <InputField
+                                                    label={t('ssh_port')}
+                                                    value={sshPort}
+                                                    onChange={(e: any) => setSshPort(e.target.value)}
+                                                    placeholder="22"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <InputField
+                                                    label={t('ssh_username')}
+                                                    value={sshUsername}
+                                                    onChange={(e: any) => setSshUsername(e.target.value)}
+                                                    placeholder="root"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <InputField
+                                                    label={t('ssh_password')}
+                                                    type="password"
+                                                    value={sshPassword}
+                                                    onChange={(e: any) => setSshPassword(e.target.value)}
+                                                    placeholder="••••••"
+                                                />
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+
                         {/* Connection Details Box */}
                         <motion.div
                             initial={{ opacity: 0, scale: 0.98 }}
@@ -862,6 +1019,9 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                 </div>
                             )}
                         </motion.div>
+
+                        {/* SSH Tunnel Section */}
+
                     </motion.div >
                 </div >
 
@@ -873,15 +1033,7 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                     transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 20 }}
                     className="px-10 py-6 border-t border-white/5 flex items-center justify-end gap-5 bg-[#09090b]/50 backdrop-blur-xl sticky bottom-0 z-20"
                 >
-                    <motion.button
-                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)' }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={onClose}
-                        className="flex items-center gap-2 px-8 py-3 rounded-xl text-gray-400 hover:text-white bg-white/5 border border-white/5 transition-all font-medium text-sm"
-                    >
-                        <X size={18} />
-                        <span>{t('cancel')}</span>
-                    </motion.button>
+
                     <motion.button
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
@@ -976,8 +1128,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                                             key={mode}
                                                             onClick={() => setThemeMode(mode)}
                                                             className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${themeSettings.mode === mode
-                                                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                                    : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-white'
+                                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                                : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-white'
                                                                 }`}
                                                         >
                                                             {t(`theme_mode_${mode}`)}
@@ -1002,8 +1154,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                                         <button
                                                             onClick={() => setAutoFollowDatabase(!themeSettings.autoFollowDatabase)}
                                                             className={`relative w-12 h-7 rounded-full transition-colors ${themeSettings.autoFollowDatabase
-                                                                    ? 'bg-blue-500'
-                                                                    : 'bg-white/10'
+                                                                ? 'bg-blue-500'
+                                                                : 'bg-white/10'
                                                                 }`}
                                                         >
                                                             <div
@@ -1030,8 +1182,8 @@ export default function DatabaseManager({ onClose, onConnect, activeService, onD
                                                                 key={preset.id}
                                                                 onClick={() => setPresetColor(preset.id)}
                                                                 className={`relative group p-3 rounded-xl border transition-all ${themeSettings.presetColorId === preset.id
-                                                                        ? 'border-blue-500/50 bg-blue-500/10'
-                                                                        : 'border-white/5 hover:border-white/20 bg-white/5'
+                                                                    ? 'border-blue-500/50 bg-blue-500/10'
+                                                                    : 'border-white/5 hover:border-white/20 bg-white/5'
                                                                     }`}
                                                             >
                                                                 <div

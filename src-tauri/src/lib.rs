@@ -21,6 +21,32 @@ use std::time::Duration;
 use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, sqlite::SqlitePoolOptions, MySqlPool, PgPool, SqlitePool};
 use sqlx::{Column, Row, TypeInfo, ValueRef}; // For manual JSON conversion
 use mongodb::{options::ClientOptions, Client};
+use russh::client;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio::sync::Mutex as AsyncMutex;
+use std::collections::HashMap;
+
+#[derive(serde::Deserialize)]
+struct SshConfig {
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    #[allow(dead_code)]
+    private_key_path: Option<String>,
+}
+
+#[derive(Clone)]
+struct ClientHandler;
+
+#[async_trait::async_trait]
+impl client::Handler for ClientHandler {
+    type Error = russh::Error;
+    async fn check_server_key(&mut self, _key: &russh_keys::PublicKey) -> Result<bool, russh::Error> {
+        Ok(true)
+    }
+}
 
 struct AppState {
     redis_client: Mutex<Option<redis::Client>>,
@@ -28,9 +54,65 @@ struct AppState {
     pg_pool: Mutex<Option<PgPool>>,
     sqlite_pool: Mutex<Option<SqlitePool>>,
     mongo_client: Mutex<Option<Client>>,
+    ssh_sessions: Mutex<HashMap<String, Arc<AsyncMutex<client::Handle<ClientHandler>>>>>,
 }
 
 // ... (existing commands) ...
+
+async fn establish_ssh_tunnel(
+    ssh_config: SshConfig,
+    remote_host: String,
+    remote_port: u16,
+) -> Result<(u16, Arc<AsyncMutex<client::Handle<ClientHandler>>>), String> {
+    let config = client::Config::default();
+    let config = Arc::new(config);
+    let sh = ClientHandler;
+    
+    let mut session = client::connect(config, (ssh_config.host.as_str(), ssh_config.port), sh)
+        .await
+        .map_err(|e| format!("SSH Connect Error: {}", e))?;
+
+    if let Some(pwd) = ssh_config.password {
+        session.authenticate_password(ssh_config.username, pwd)
+            .await
+            .map_err(|e| format!("SSH Auth Error: {}", e))?;
+    } else {
+        return Err("Only password auth supported for now".to_string());
+    }
+    
+    let session = Arc::new(AsyncMutex::new(session));
+    let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
+    let local_port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    
+    let loop_handle = session.clone();
+    let r_host = remote_host.clone();
+    let r_port = remote_port;
+
+    tokio::spawn(async move {
+        loop {
+            if let Ok((stream, _)) = listener.accept().await {
+                let handle = loop_handle.lock().await;
+                let mut channel = match handle.channel_open_direct_tcpip(r_host.clone(), r_port as u32, "127.0.0.1", 0).await {
+                    Ok(c) => c.into_stream(),
+                    Err(e) => {
+                        eprintln!("Failed to open channel: {}", e);
+                        continue;
+                    }
+                };
+                
+                tokio::spawn(async move {
+                    let mut stream = stream;
+                    // channel needs key handling? No, generic.
+                    let _ = tokio::io::copy_bidirectional(&mut stream, &mut channel).await;
+                });
+            } else {
+                break; 
+            }
+        }
+    });
+
+    Ok((local_port, session))
+}
 
 #[tauri::command]
 async fn connect_sqlite(state: State<'_, AppState>, path: String) -> Result<String, String> {
@@ -320,16 +402,26 @@ async fn connect_redis(
     port: u16,
     password: Option<String>,
     timeout_sec: Option<u64>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
+    
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+        let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
+        state.ssh_sessions.lock().unwrap().insert("redis".to_string(), handle);
+        ("127.0.0.1".to_string(), local_port)
+    } else {
+        (host, port)
+    };
+
     let url = if let Some(pwd) = password {
         if !pwd.is_empty() {
-            format!("redis://:{}@{}:{}/", pwd, host, port)
+            format!("redis://:{}@{}:{}/", pwd, final_host, final_port)
         } else {
-            format!("redis://{}:{}/", host, port)
+            format!("redis://{}:{}/", final_host, final_port)
         }
     } else {
-        format!("redis://{}:{}/", host, port)
+        format!("redis://{}:{}/", final_host, final_port)
     };
 
     let client = redis::Client::open(url).map_err(|e| e.to_string())?;
@@ -355,15 +447,25 @@ async fn connect_mysql(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
+    ssh_config: Option<SshConfig>, 
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
-    let db = database.unwrap_or_else(|| "mysql".to_string()); // Default to mysql db to test connection
+    let db = database.unwrap_or_else(|| "mysql".to_string());
+
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+        let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
+        state.ssh_sessions.lock().unwrap().insert("mysql".to_string(), handle);
+        ("127.0.0.1".to_string(), local_port)
+    } else {
+        (host, port)
+    };
+
     let url = format!(
         "mysql://{}:{}@{}:{}/{}",
         username,
         password.unwrap_or_default(),
-        host,
-        port,
+        final_host,
+        final_port,
         db
     );
 
@@ -387,15 +489,25 @@ async fn connect_postgres(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "postgres".to_string());
+
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+        let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
+        state.ssh_sessions.lock().unwrap().insert("postgres".to_string(), handle);
+        ("127.0.0.1".to_string(), local_port)
+    } else {
+        (host, port)
+    };
+
     let url = format!(
         "postgres://{}:{}@{}:{}/{}",
         username,
         password.unwrap_or_default(),
-        host,
-        port,
+        final_host,
+        final_port,
         db
     );
 
@@ -418,9 +530,19 @@ async fn connect_mongodb(
     username: Option<String>,
     password: Option<String>,
     timeout_sec: Option<u64>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
-    let mut client_options = ClientOptions::parse(format!("mongodb://{}:{}", host, port))
+    
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+        let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
+        state.ssh_sessions.lock().unwrap().insert("mongodb".to_string(), handle);
+        ("127.0.0.1".to_string(), local_port)
+    } else {
+        (host, port)
+    };
+
+    let mut client_options = ClientOptions::parse(format!("mongodb://{}:{}", final_host, final_port))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1547,6 +1669,7 @@ pub fn run() {
         pg_pool: Mutex::new(None),
         sqlite_pool: Mutex::new(None),
         mongo_client: Mutex::new(None),
+        ssh_sessions: Mutex::new(HashMap::new()),
     })
     .invoke_handler(tauri::generate_handler![
         greet,

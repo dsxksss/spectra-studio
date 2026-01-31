@@ -105,6 +105,13 @@ export const resources = {
             db_file: "Database File",
             select_file: "Select File",
 
+            // SSH Tunnel
+            ssh_tunnel: "SSH Tunnel",
+            ssh_host: "SSH Host",
+            ssh_port: "SSH Port",
+            ssh_username: "SSH Username",
+            ssh_password: "SSH Password",
+
             // Context Menu
             edit_connection: "Edit Connection",
             delete_connection: "Delete Connection",
@@ -280,6 +287,13 @@ export const resources = {
             // SQLite
             db_file: "数据库文件",
             select_file: "选择文件",
+
+            // SSH Tunnel
+            ssh_tunnel: "SSH 通道",
+            ssh_host: "SSH 主机",
+            ssh_port: "SSH 端口",
+            ssh_username: "SSH 用户名",
+            ssh_password: "SSH 密码",
 
             // Context Menu
             edit_connection: "编辑连接",

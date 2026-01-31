@@ -7,7 +7,7 @@ function App() {
     return (
         <I18nProvider>
             <ThemeProvider>
-                <div className="w-full h-full bg-transparent">
+                <div className="w-full h-full bg-transparent pointer-events-none">
                     <FloatingApp />
                 </div>
             </ThemeProvider>

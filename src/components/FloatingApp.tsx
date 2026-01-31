@@ -3,7 +3,9 @@ import {
     X,
     GripVertical,
     Maximize2,
-    Minimize2
+    Minimize2,
+    Pin,
+    PinOff
 } from "lucide-react";
 import Logo from "./Logo";
 import {
@@ -72,6 +74,22 @@ export default function FloatingApp() {
     const [bgOpacity, setBgOpacity] = useState(1);
     const bgTransitionRef = useRef(false);
 
+    const [isPinned, setIsPinned] = useState(false);
+
+    const togglePin = async () => {
+        try {
+            const newState = !isPinned;
+            setIsPinned(newState);
+            await getCurrentWindow().setAlwaysOnTop(newState);
+        } catch (e) {
+            console.error("Failed to toggle pin:", e);
+        }
+    };
+
+    useEffect(() => {
+        getCurrentWindow().setAlwaysOnTop(isPinned).catch(e => console.error("Failed to set initial pin state:", e));
+    }, []);
+
     // Handle theme color change with fade transition
     useEffect(() => {
         if (currentThemeColor !== appliedThemeColor && !bgTransitionRef.current) {
@@ -96,60 +114,9 @@ export default function FloatingApp() {
         }
     }, [currentThemeColor, appliedThemeColor]);
 
-    const resetToStandardSize = async () => {
-        const appWindow = getCurrentWindow();
-        const factor = await appWindow.scaleFactor();
 
-        // Get Work Area for constraints
-        const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
-        const [waX, waY, waW, waH] = workArea;
 
-        // Target: 1200x800 or Screen Size (whichever is smaller)
-        const targetPhysicalW = 1200 * factor;
-        const targetPhysicalH = 800 * factor;
-
-        const finalW = Math.min(targetPhysicalW, waW);
-        const finalH = Math.min(targetPhysicalH, waH);
-
-        // Calculate Anchor (Bottom-Right) based on current window
-        const outerPos = await appWindow.outerPosition();
-        const outerSize = await appWindow.outerSize();
-
-        const brX = outerPos.x + outerSize.width;
-        const brY = outerPos.y + outerSize.height;
-
-        // New Top-Left
-        // If we strictly anchor BR:
-        let newX = brX - finalW;
-        let newY = brY - finalH;
-
-        // Boundary Check: Ensure we don't push off-screen (top/left)
-        // If window was near left edge, resizing width might push x negative relative to Work Area?
-        // Let's ensure newX >= waX and newY >= waY
-        if (newX < waX) newX = waX;
-        if (newY < waY) newY = waY;
-
-        // Also check right/bottom bounds (though size clamping helps)
-        if (newX + finalW > waX + waW) newX = waX + waW - finalW;
-        if (newY + finalH > waY + waH) newY = waY + waH - finalH;
-
-        await Promise.all([
-            appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
-            appWindow.setSize(new PhysicalSize(Math.round(finalW), Math.round(finalH)))
-        ]);
-
-        // Logic UI Size (convert back to Logical for state)
-        const logicalW = finalW / factor;
-        const logicalH = finalH / factor;
-
-        setCurrentUiSize({ w: logicalW, h: logicalH, r: UI_SIZES.expanded.r });
-        // Update persistent size
-        if (UI_SIZES.expanded) {
-            UI_SIZES.expanded.w = logicalW;
-            UI_SIZES.expanded.h = logicalH;
-        }
-        setIsMaximized(false);
-    };
+    const [previousWindowBounds, setPreviousWindowBounds] = useState<{ x: number, y: number } | null>(null);
 
     const toggleMaximize = async () => {
         const appWindow = getCurrentWindow();
@@ -160,20 +127,19 @@ export default function FloatingApp() {
             const targetW = UI_SIZES.expanded.w * factor;
             const targetH = UI_SIZES.expanded.h * factor;
 
-            // Restore relies on persisted size, usually we center or reuse saved pos.
-            // Since we don't save pos, let's Center it in Work Area (as implemented before) OR Anchor Bottom Right?
-            // "Toggle Maximize" usually restores to previous position.
-            // But for simplicity/robustness, user didn't complain about Maximize/Restore behavior, 
-            // only about "Minimize" (Reset) behavior. 
-            // I'll keep Restore centering logic for now unless requested, 
-            // OR I can make Restore also Anchor BR if I knew where it was.
-            // Let's stick to existing logic for Toggle Maximize (Center).
+            let newX, newY;
 
-            const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
-            const [waX, waY, waW, waH] = workArea;
-
-            const newX = waX + (waW - targetW) / 2;
-            const newY = waY + (waH - targetH) / 2;
+            if (previousWindowBounds) {
+                // Restore to previous position
+                newX = previousWindowBounds.x;
+                newY = previousWindowBounds.y;
+            } else {
+                // Fallback to center if no previous bounds
+                const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
+                const [waX, waY, waW, waH] = workArea;
+                newX = waX + (waW - targetW) / 2;
+                newY = waY + (waH - targetH) / 2;
+            }
 
             await Promise.all([
                 appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
@@ -184,6 +150,10 @@ export default function FloatingApp() {
             setIsMaximized(false);
         } else {
             // Maximize
+            // Save current position before maximizing
+            const currentPos = await appWindow.outerPosition();
+            setPreviousWindowBounds({ x: currentPos.x, y: currentPos.y });
+
             const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
             const [waX, waY, waW, waH] = workArea;
 
@@ -417,11 +387,11 @@ export default function FloatingApp() {
                         {/* Windows Controls Overlay */}
                         <div className="absolute top-4 right-4 z-[60] flex items-center gap-2 bg-[#18181b]/80 backdrop-blur rounded-lg p-1 border border-white/5 shadow-lg">
                             <button
-                                onClick={resetToStandardSize}
-                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                title="Reset Size (1200x800)"
+                                onClick={togglePin}
+                                className={`p-1.5 rounded-md transition-colors ${isPinned ? "text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
+                                title={isPinned ? "Unpin from Top" : "Pin to Top"}
                             >
-                                <Minimize2 size={14} />
+                                {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
                             </button>
                             <button
                                 onClick={toggleMaximize}
