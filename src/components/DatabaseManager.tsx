@@ -517,44 +517,55 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
             // Let's append sshConfig to performConnect signature.
 
 
-            if (service === 'Redis') {
-                res = await invoke('connect_redis', {
-                    host: hostStr,
-                    port: portNum,
-                    password: passwordArg,
-                    timeout_sec: timeoutSec,
-                    ssh_config: sshConfig
-                });
-                res = await invoke('connect_mysql', {
-                    host: hostStr,
-                    port: portNum,
-                    username: usernameArg,
-                    password: passwordArg,
-                    database: dbArg,
-                    timeout_sec: timeoutSec,
-                    ssh_config: sshConfig
-                });
-                res = await invoke('connect_postgres', {
-                    host: hostStr,
-                    port: portNum,
-                    username: usernameArg,
-                    password: passwordArg,
-                    database: dbArg,
-                    timeout_sec: timeoutSec,
-                    ssh_config: sshConfig
-                });
-                res = await invoke('connect_mongodb', {
-                    host: hostStr,
-                    port: portNum,
-                    username: usernameArg || null, // Allow empty user for mongo
-                    password: passwordArg,
-                    timeout_sec: timeoutSec,
-                    ssh_config: sshConfig
-                });
-            } else if (service === 'SQLite') {
-                res = await invoke('connect_sqlite', {
-                    path: hostStr
-                });
+            switch (service) {
+                case 'Redis':
+                    res = await invoke('connect_redis', {
+                        host: hostStr,
+                        port: portNum,
+                        password: passwordArg,
+                        timeout_sec: timeoutSec,
+                        ssh_config: sshConfig
+                    });
+                    break;
+                case 'MySQL':
+                    res = await invoke('connect_mysql', {
+                        host: hostStr,
+                        port: portNum,
+                        username: usernameArg,
+                        password: passwordArg,
+                        database: dbArg,
+                        timeout_sec: timeoutSec,
+                        ssh_config: sshConfig
+                    });
+                    break;
+                case 'PostgreSQL':
+                    res = await invoke('connect_postgres', {
+                        host: hostStr,
+                        port: portNum,
+                        username: usernameArg,
+                        password: passwordArg,
+                        database: dbArg,
+                        timeout_sec: timeoutSec,
+                        ssh_config: sshConfig
+                    });
+                    break;
+                case 'MongoDB':
+                    res = await invoke('connect_mongodb', {
+                        host: hostStr,
+                        port: portNum,
+                        username: usernameArg || null, // Allow empty user for mongo
+                        password: passwordArg,
+                        timeout_sec: timeoutSec,
+                        ssh_config: sshConfig
+                    });
+                    break;
+                case 'SQLite':
+                    res = await invoke('connect_sqlite', {
+                        path: hostStr
+                    });
+                    break;
+                default:
+                    throw new Error(`Unsupported service: ${service}`);
             }
 
             console.log(res);

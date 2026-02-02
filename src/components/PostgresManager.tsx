@@ -314,17 +314,21 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
             setDatabaseSizes(sizes);
 
             setDatabases(dbs);
-            // Auto-expand the connected database (extract from connection string)
+            // Auto-expand the connected database
             if (dbs.length > 0 && !selectedDatabase) {
-                // For PostgreSQL, we can only view the current connected database's tables
-                // but can see the list of all databases
-                const connectedDb = connectionName?.split('/')[0]?.split('@')[0] || dbs[0];
-                const foundDb = dbs.find(d => connectedDb.includes(d)) || dbs[0];
-                setSelectedDatabase(foundDb);
-                setExpandedDatabases(new Set([foundDb]));
+                // Prioritize the database from config, then the first non-system database
+                const configDb = config?.database;
+                const firstNonSystem = dbs.find(d => !SYSTEM_DATABASES.includes(d.toLowerCase()));
+                const activeDb = (configDb && dbs.includes(configDb)) ? configDb : (firstNonSystem || dbs[0]);
+
+                setSelectedDatabase(activeDb);
+                setExpandedDatabases(new Set([activeDb]));
+                setExpandedFolders(prev => new Set([...prev, 'tables']));
             }
         } catch (err: any) {
             console.error("Failed to fetch databases", err);
+            setError(typeof err === 'string' ? err : "Failed to fetch databases.");
+            showToast("Failed to fetch databases", 'error');
         }
     };
 
@@ -363,6 +367,7 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
             // Reset selection
             if (tableNames.length > 0) {
                 setSelectedKey(tableNames[0]);
+                setExpandedFolders(prev => new Set([...prev, 'tables']));
             } else {
                 setSelectedKey(null);
             }
@@ -429,6 +434,7 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
             // Automatically select the first table if available
             if (tableNames.length > 0) {
                 setSelectedKey(tableNames[0]);
+                setExpandedFolders(prev => new Set([...prev, 'tables']));
             }
 
             // Fetch views

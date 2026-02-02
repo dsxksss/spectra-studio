@@ -86,7 +86,7 @@ const ConfirmDialog = ({
     );
 };
 
-export default function MySQLManager({ onDisconnect, onDragStart, connectionName }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string }) {
+export default function MySQLManager({ onDisconnect, onDragStart, connectionName, config }: { onClose?: () => void, onDisconnect?: () => void, onDragStart?: (e: React.PointerEvent) => void, connectionName?: string, config?: any }) {
     const { t } = useTranslation();
     const [, setKeys] = useState<string[]>([]);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -328,18 +328,23 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             setDatabases(dbs);
             // Auto-expand the connected database
             if (dbs.length > 0 && !selectedDatabase) {
-                // Get the current database from connection
-                const currentDb = connectionName?.split('@')[0] || dbs[0];
-                const activeDb = dbs.includes(currentDb) ? currentDb : dbs[0];
+                // Prioritize the database from config, then the first non-system database
+                const configDb = config?.database;
+                const firstNonSystem = dbs.find(d => !SYSTEM_DATABASES.includes(d.toLowerCase()));
+                const activeDb = (configDb && dbs.includes(configDb)) ? configDb : (firstNonSystem || dbs[0]);
+
                 setSelectedDatabase(activeDb);
                 setExpandedDatabases(new Set([activeDb]));
                 // Fetch tables for the current database
                 const tables = await invoke<string[]>('mysql_get_tables');
                 setDatabaseTables(prev => ({ ...prev, [activeDb]: tables.sort() }));
                 setKeys(tables.sort());
+                setExpandedFolders(prev => new Set([...prev, `${activeDb}:tables`]));
             }
         } catch (err: any) {
             console.error("Failed to fetch databases", err);
+            setError(typeof err === 'string' ? err : "Failed to fetch databases.");
+            showToast("Failed to fetch databases", 'error');
         }
     };
 
@@ -443,6 +448,9 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             // Automatically select the first table if available
             if (res.length > 0) {
                 setSelectedKey(res[0]);
+                if (selectedDatabase) {
+                    setExpandedFolders(prev => new Set([...prev, `${selectedDatabase}:tables`]));
+                }
             }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);

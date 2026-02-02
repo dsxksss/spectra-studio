@@ -426,6 +426,7 @@ export default function FloatingApp() {
                                     onDisconnect={() => setConnectedService(null)}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
+                                    config={connectionConfig}
                                 />
                             ) : connectedService === 'SQLite' ? (
                                 <SQLiteManager
