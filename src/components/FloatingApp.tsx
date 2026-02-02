@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
     X,
+    Minus,
     GripVertical,
     Maximize2,
     Minimize2,
@@ -402,13 +403,12 @@ export default function FloatingApp() {
                             </button>
                             <button
                                 onClick={() => {
-                                    setConnectedService(null);
                                     handleChangeMode('toolbar');
                                 }}
                                 className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                title="Close Panel"
+                                title={t('minimize') || "Minimize"}
                             >
-                                <X size={14} />
+                                <Minus size={14} />
                             </button>
                         </div>
 
