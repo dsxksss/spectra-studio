@@ -179,7 +179,17 @@ export const resources = {
             sunset: "Sunset",
             purple_rain: "Purple Rain",
             rose: "Rose",
-            slate: "Slate"
+            slate: "Slate",
+            close: "Close",
+            decrease_port: "Decrease Port",
+            increase_port: "Increase Port",
+            toggle_ssh: "Toggle SSH Tunnel",
+            refresh_list: "Refresh Connection List",
+            minimize: "Minimize",
+            maximize: "Maximize",
+            restore: "Restore",
+            pin: "Pin to Top",
+            unpin: "Unpin from Top"
         }
     },
     zh: {
@@ -362,7 +372,17 @@ export const resources = {
             sunset: "日落",
             purple_rain: "紫雨",
             rose: "玫瑰",
-            slate: "石板灰"
+            slate: "石板灰",
+            close: "关闭",
+            decrease_port: "减小端口",
+            increase_port: "增加端口",
+            toggle_ssh: "切换 SSH 通道",
+            refresh_list: "刷新连接列表",
+            minimize: "最小化",
+            maximize: "最大化",
+            restore: "还原",
+            pin: "置顶",
+            unpin: "取消置顶"
         }
     }
 };

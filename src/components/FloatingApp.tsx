@@ -17,6 +17,7 @@ import {
     MongoIconSingle,
     SQLiteIcon
 } from "./icons";
+import { Tooltip } from "./Tooltip";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
@@ -387,29 +388,32 @@ export default function FloatingApp() {
                     <div className="w-full h-full relative flex flex-col overflow-hidden">
                         {/* Windows Controls Overlay */}
                         <div className="absolute top-4 right-4 z-[60] flex items-center gap-2 bg-[#18181b]/80 backdrop-blur rounded-lg p-1 border border-white/5 shadow-lg">
-                            <button
-                                onClick={togglePin}
-                                className={`p-1.5 rounded-md transition-colors ${isPinned ? "text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
-                                title={isPinned ? "Unpin from Top" : "Pin to Top"}
-                            >
-                                {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-                            </button>
-                            <button
-                                onClick={toggleMaximize}
-                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                title={isMaximized ? "Restore" : "Maximize"}
-                            >
-                                {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    handleChangeMode('toolbar');
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                title={t('minimize') || "Minimize"}
-                            >
-                                <Minus size={14} />
-                            </button>
+                            <Tooltip content={isPinned ? t('unpin') : t('pin')} position="bottom">
+                                <button
+                                    onClick={togglePin}
+                                    className={`p-1.5 rounded-md transition-colors ${isPinned ? "text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
+                                >
+                                    {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                                </button>
+                            </Tooltip>
+                            <Tooltip content={isMaximized ? t('restore') : t('maximize')} position="bottom">
+                                <button
+                                    onClick={toggleMaximize}
+                                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                >
+                                    {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                </button>
+                            </Tooltip>
+                            <Tooltip content={t('minimize')} position="bottom">
+                                <button
+                                    onClick={() => {
+                                        handleChangeMode('toolbar');
+                                    }}
+                                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                >
+                                    <Minus size={14} />
+                                </button>
+                            </Tooltip>
                         </div>
 
                         <div className="relative z-10 w-full h-full flex flex-col">
@@ -489,7 +493,6 @@ export default function FloatingApp() {
                                                 { name: 'Redis', icon: RedisIcon }
                                             ].map(({ name, icon: Icon }, i) => (
                                                 <div
-                                                    key={name}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleChangeMode('expanded', name);
@@ -509,10 +512,11 @@ export default function FloatingApp() {
                         </button >
                         <div className="w-[1px] h-6 bg-white/10 shrink-0" />
                         <div className="flex items-center gap-1 shrink-0">
-
-                            <button onClick={() => getCurrentWindow().close()} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-red-400 transition-colors">
-                                <X size={16} />
-                            </button>
+                            <Tooltip content={t('close')} position="left">
+                                <button onClick={() => getCurrentWindow().close()} className="p-2 text-gray-400 rounded-md hover:bg-white/5 hover:text-red-400 transition-colors">
+                                    <X size={16} />
+                                </button>
+                            </Tooltip>
                         </div>
                     </div >
                 );

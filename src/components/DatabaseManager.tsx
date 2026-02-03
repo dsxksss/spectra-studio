@@ -23,6 +23,7 @@ import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { Toast, ToastType } from './Toast';
+import { Tooltip } from './Tooltip';
 import {
     RedisIcon,
     PostgresIcon,
@@ -713,13 +714,14 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                     <div className="flex items-center justify-between px-6 py-4">
                         <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">{t('connection_name')}</span>
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleCreateNew}
-                                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                                title={t('new_connection')}
-                            >
-                                <Plus size={14} />
-                            </button>
+                            <Tooltip content={t('new_connection')} position="bottom">
+                                <button
+                                    onClick={handleCreateNew}
+                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                                >
+                                    <Plus size={14} />
+                                </button>
+                            </Tooltip>
                             <span className="bg-white/5 text-gray-500 px-2 py-0.5 rounded-full text-[10px] font-mono border border-white/5">{savedConnections.length}</span>
                         </div>
                     </div>
@@ -775,13 +777,17 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                         </div>
 
                                         {/* Direct Connect Button */}
-                                        <button
-                                            onClick={(e) => handleSavedConnect(e, conn)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
-                                            title="Connect Now"
-                                        >
-                                            <Play size={14} fill="currentColor" />
-                                        </button>
+                                        {/* Direct Connect Button */}
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95">
+                                            <Tooltip content={t('connect')} position="left">
+                                                <button
+                                                    onClick={(e) => handleSavedConnect(e, conn)}
+                                                    className="p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 shadow-lg shadow-green-500/20"
+                                                >
+                                                    <Play size={14} fill="currentColor" />
+                                                </button>
+                                            </Tooltip>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -820,13 +826,17 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                             </div>
 
                                             {/* Direct Connect Button */}
-                                            <button
-                                                onClick={(e) => handleSavedConnect(e, conn)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95 shadow-lg shadow-green-500/20"
-                                                title="Connect Now"
-                                            >
-                                                <Play size={14} fill="currentColor" />
-                                            </button>
+                                            {/* Direct Connect Button */}
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-110 active:scale-95">
+                                                <Tooltip content={t('connect')} position="left">
+                                                    <button
+                                                        onClick={(e) => handleSavedConnect(e, conn)}
+                                                        className="p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20 shadow-lg shadow-green-500/20"
+                                                    >
+                                                        <Play size={14} fill="currentColor" />
+                                                    </button>
+                                                </Tooltip>
+                                            </div>
                                         </div>
                                     </Reorder.Item>
                                 ))}
@@ -871,12 +881,14 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         </div>
                         <span className="font-medium tracking-wide">{appVersion} Stable</span>
                     </div>
-                    <button
-                        onClick={() => setShowSettings(true)}
-                        className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-gray-300 transition-all active:scale-95"
-                    >
-                        <Settings size={18} />
-                    </button>
+                    <Tooltip content={t('settings')} position="right">
+                        <button
+                            onClick={() => setShowSettings(true)}
+                            className="p-2 hover:bg-white/5 rounded-lg text-gray-500 hover:text-gray-300 transition-all active:scale-95"
+                        >
+                            <Settings size={18} />
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 
@@ -967,12 +979,14 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                     <Shield size={16} className={useSSH ? "text-blue-400" : "text-gray-500"} />
                                     <h3 className={`text-sm font-bold uppercase tracking-widest ${useSSH ? "text-gray-200" : "text-gray-500"}`}>{t('ssh_tunnel')}</h3>
                                 </div>
-                                <button
-                                    onClick={() => setUseSSH(!useSSH)}
-                                    className={`relative w-12 h-6 rounded-full transition-colors ${useSSH ? 'bg-blue-600' : 'bg-white/10'}`}
-                                >
-                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all ${useSSH ? 'left-7' : 'left-1'}`} />
-                                </button>
+                                <Tooltip content={t('toggle_ssh')} position="top">
+                                    <button
+                                        onClick={() => setUseSSH(!useSSH)}
+                                        className={`relative w-12 h-6 rounded-full transition-colors ${useSSH ? 'bg-blue-600' : 'bg-white/10'}`}
+                                    >
+                                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all ${useSSH ? 'left-7' : 'left-1'}`} />
+                                    </button>
+                                </Tooltip>
                             </div>
 
                             <AnimatePresence>
@@ -1054,23 +1068,27 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                     <div className="flex flex-col gap-2.5 flex-[1]">
                                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">{t('port')}</label>
                                         <div className="flex items-center h-[46px] bg-[#121214] border border-white/5 rounded-xl transition-colors hover:border-white/10 shadow-inner">
-                                            <button
-                                                onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
-                                                className="px-3.5 py-3 hover:text-white text-gray-500 border-r border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
-                                            >
-                                                -
-                                            </button>
+                                            <Tooltip content={t('decrease_port')} position="top">
+                                                <button
+                                                    onClick={() => setPort((prev) => String(Math.max(1, parseInt(prev || '0') - 1)))}
+                                                    className="px-3.5 py-3 hover:text-white text-gray-500 border-r border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
+                                                >
+                                                    -
+                                                </button>
+                                            </Tooltip>
                                             <input
                                                 className="w-full bg-transparent text-center text-gray-200 outline-none font-mono text-sm py-3"
                                                 value={port}
                                                 onChange={(e: any) => setPort(e.target.value)}
                                             />
-                                            <button
-                                                onClick={() => setPort((prev) => String(parseInt(prev || '0') + 1))}
-                                                className="px-3.5 py-3 hover:text-white text-gray-500 border-l border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
-                                            >
-                                                +
-                                            </button>
+                                            <Tooltip content={t('increase_port')} position="top">
+                                                <button
+                                                    onClick={() => setPort((prev) => String(parseInt(prev || '0') + 1))}
+                                                    className="px-3.5 py-3 hover:text-white text-gray-500 border-l border-white/5 transition-colors hover:bg-white/5 disabled:opacity-50"
+                                                >
+                                                    +
+                                                </button>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                 )}
@@ -1090,12 +1108,14 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                             placeholder={t('enter_password')}
                                             className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
                                         />
-                                        <button
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                        </button>
+                                        <Tooltip content={showPassword ? t('hide_password') : t('show_password')} position="left">
+                                            <button
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                                            >
+                                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 </div>
                             </div>
@@ -1177,9 +1197,11 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                             <Settings size={18} className="text-gray-500" />
                                             {t('settings')}
                                         </h3>
-                                        <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
-                                            <X size={18} />
-                                        </button>
+                                        <Tooltip content={t('close')} position="left">
+                                            <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-white transition-colors">
+                                                <X size={18} />
+                                            </button>
+                                        </Tooltip>
                                     </div>
 
                                     <div className="p-6 space-y-6 overflow-y-auto flex-1">
