@@ -493,6 +493,7 @@ export default function FloatingApp() {
                                                 { name: 'Redis', icon: RedisIcon }
                                             ].map(({ name, icon: Icon }, i) => (
                                                 <div
+                                                    key={name}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleChangeMode('expanded', name);

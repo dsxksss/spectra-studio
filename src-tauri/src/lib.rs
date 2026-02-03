@@ -27,12 +27,15 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex as AsyncMutex;
 use std::collections::HashMap;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct SshConfig {
     host: String,
     port: u16,
     username: String,
+    #[serde(default)]
     password: Option<String>,
+    #[serde(default)] // This ensures missing field in JSON becomes None
     #[allow(dead_code)]
     private_key_path: Option<String>,
 }
@@ -402,11 +405,11 @@ async fn connect_redis(
     port: u16,
     password: Option<String>,
     timeout_sec: Option<u64>,
-    ssh_config: Option<SshConfig>,
+    sshConfig: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     
-    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+    let (final_host, final_port) = if let Some(ssh) = sshConfig {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("redis".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -414,18 +417,16 @@ async fn connect_redis(
         (host, port)
     };
 
-    let url = if let Some(pwd) = password {
-        if !pwd.is_empty() {
-            format!("redis://:{}@{}:{}/", pwd, final_host, final_port)
-        } else {
-            format!("redis://{}:{}/", final_host, final_port)
-        }
-    } else {
-        format!("redis://{}:{}/", final_host, final_port)
-    };
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: redis::ConnectionAddr::Tcp(final_host, final_port),
+        redis: redis::RedisConnectionInfo {
+            db: 0,
+            username: None,
+            password: password,
+            ..Default::default()
+        },
+    }).map_err(|e| e.to_string())?;
 
-    let client = redis::Client::open(url).map_err(|e| e.to_string())?;
-    
     // Use tokio timeout for connection
     let mut con = tokio::time::timeout(timeout_val, client.get_multiplexed_async_connection())
         .await
@@ -447,12 +448,14 @@ async fn connect_mysql(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
-    ssh_config: Option<SshConfig>, 
+    sshConfig: Option<SshConfig>, 
 ) -> Result<String, String> {
+    use sqlx::mysql::MySqlConnectOptions;
+
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "mysql".to_string());
 
-    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+    let (final_host, final_port) = if let Some(ssh) = sshConfig {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("mysql".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -460,19 +463,22 @@ async fn connect_mysql(
         (host, port)
     };
 
-    let url = format!(
-        "mysql://{}:{}@{}:{}/{}",
-        username,
-        password.unwrap_or_default(),
-        final_host,
-        final_port,
-        db
-    );
+    let mut options = MySqlConnectOptions::new()
+        .host(&final_host)
+        .port(final_port)
+        .username(&username)
+        .database(&db);
+
+    if let Some(pwd) = password {
+        if !pwd.is_empty() {
+            options = options.password(&pwd);
+        }
+    }
 
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(timeout_val)
-        .connect(&url)
+        .connect_with(options)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -489,12 +495,14 @@ async fn connect_postgres(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
-    ssh_config: Option<SshConfig>,
+    sshConfig: Option<SshConfig>,
 ) -> Result<String, String> {
+    use sqlx::postgres::{PgConnectOptions, PgSslMode};
+
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "postgres".to_string());
 
-    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+    let (final_host, final_port) = if let Some(ssh) = sshConfig {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("postgres".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -502,19 +510,24 @@ async fn connect_postgres(
         (host, port)
     };
 
-    let url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        username,
-        password.unwrap_or_default(),
-        final_host,
-        final_port,
-        db
-    );
+    let mut options = PgConnectOptions::new()
+        .host(&final_host)
+        .port(final_port)
+        .username(&username)
+        .database(&db)
+        .ssl_mode(PgSslMode::Disable); // Disable SSL via tunnel to avoid hostname mismatch
 
+    if let Some(pwd) = password {
+        if !pwd.is_empty() {
+            options = options.password(&pwd);
+        }
+    }
+
+    // Attempt to connect
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(timeout_val)
-        .connect(&url)
+        .connect_with(options)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -530,11 +543,11 @@ async fn connect_mongodb(
     username: Option<String>,
     password: Option<String>,
     timeout_sec: Option<u64>,
-    ssh_config: Option<SshConfig>,
+    sshConfig: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     
-    let (final_host, final_port) = if let Some(ssh) = ssh_config {
+    let (final_host, final_port) = if let Some(ssh) = sshConfig {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("mongodb".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -988,7 +1001,7 @@ async fn postgres_get_databases(state: State<'_, AppState>) -> Result<Vec<(Strin
         guard.clone().ok_or("Not connected")?
     };
 
-    let rows: Vec<(String, i64)> = sqlx::query_as("SELECT datname::text, pg_database_size(datname) as size FROM pg_database WHERE datistemplate = false ORDER BY datname")
+    let rows: Vec<(String, i64)> = sqlx::query_as("SELECT datname::text, pg_database_size(datname) as size FROM pg_database WHERE datistemplate = false AND has_database_privilege(datname, 'CONNECT') ORDER BY datname")
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;

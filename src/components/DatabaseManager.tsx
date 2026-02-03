@@ -561,7 +561,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         showToast('Connection deleted', 'success');
     };
 
-    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false, nameOverride?: string) => {
+    const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false, nameOverride?: string, sshConfigOverride?: any) => {
         setIsConnecting(true);
         try {
             let res;
@@ -570,31 +570,24 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
             const usernameArg = usernameStr || '';
             const dbArg = dbNameStr || null;
 
-            const sshConfig = useSSH ? {
-                host: sshHost,
-                port: parseInt(sshPort),
-                username: sshUsername,
-                password: sshPassword || null,
-            } : null;
-
-            // In saved connection play mode, we need to pass ssh config too. 
-            // But performConnect signature is getting messy. 
-            // Let's rely on state if calling from form, or arguments if from saved. 
-            // Wait, performConnect is called with args. 
-            // We need to add ssh config to args of performConnect or rely on a separate object.
-            // Let's modify invoke to include ssh.
-
-            // NOTE: The current performConnect signature doesn't include SSH args. 
-            // We'll trust the component state 'useSSH' etc if we are in "Connect" mode from form.
-            // BUT for 'SavedConnection', we need to pass the SSH config handling.
-            // Since 'performConnect' is called by handleSavedConnect, we should update performConnect signature to accept an config object or optional params.
-            // For now, let's just use the state if it matches the current editing form, 
-            // BUT handleSavedConnect passes specific values. 
-
-            // To fix this cleanly:
-            // 1. We'll use a `config` object in performConnect instead of many args, OR append sshConfig.
-            // Let's append sshConfig to performConnect signature.
-
+            let sshConfig = null;
+            if (sshConfigOverride !== undefined) {
+                // If override is provided (even if null), use it, but ensure port is a number if it exists
+                if (sshConfigOverride) {
+                    sshConfig = {
+                        ...sshConfigOverride,
+                        port: typeof sshConfigOverride.port === 'string' ? parseInt(sshConfigOverride.port) : sshConfigOverride.port
+                    };
+                }
+            } else if (useSSH) {
+                // Fallback to form state
+                sshConfig = {
+                    host: sshHost,
+                    port: parseInt(sshPort),
+                    username: sshUsername,
+                    password: sshPassword || null,
+                };
+            }
 
             switch (service) {
                 case 'Redis':
@@ -603,7 +596,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         port: portNum,
                         password: passwordArg,
                         timeout_sec: timeoutSec,
-                        ssh_config: sshConfig
+                        sshConfig
                     });
                     break;
                 case 'MySQL':
@@ -614,7 +607,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         password: passwordArg,
                         database: dbArg,
                         timeout_sec: timeoutSec,
-                        ssh_config: sshConfig
+                        sshConfig
                     });
                     break;
                 case 'PostgreSQL':
@@ -625,7 +618,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         password: passwordArg,
                         database: dbArg,
                         timeout_sec: timeoutSec,
-                        ssh_config: sshConfig
+                        sshConfig
                     });
                     break;
                 case 'MongoDB':
@@ -635,7 +628,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         username: usernameArg || null, // Allow empty user for mongo
                         password: passwordArg,
                         timeout_sec: timeoutSec,
-                        ssh_config: sshConfig
+                        sshConfig
                     });
                     break;
                 case 'SQLite':
@@ -670,17 +663,17 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
     };
 
     const handleConnectClick = () => {
-        performConnect(selectedService, host, port, password, username, dbName, true, undefined);
+        performConnect(selectedService, host, port, password, username, dbName, true, undefined, undefined);
     };
 
     const handleSavedConnect = (e: React.MouseEvent, conn: SavedConnection) => {
         e.stopPropagation();
         // Just connect, do not load into form (user rule: edit only via context menu)
-        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name);
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name, conn.ssh);
     };
 
     const handleDoubleClick = (conn: SavedConnection) => {
-        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name);
+        performConnect(conn.type, conn.host, conn.port, conn.password || '', conn.username, conn.database || '', false, conn.name, conn.ssh);
     };
 
     const filteredConnections = savedConnections.filter(c =>

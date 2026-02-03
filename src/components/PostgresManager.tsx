@@ -346,7 +346,8 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
                 username: config.username,
                 password: config.password || null,
                 database: targetDb,
-                timeout_sec: 5
+                timeout_sec: 5,
+                sshConfig: config.ssh
             });
 
             setSelectedDatabase(targetDb);
