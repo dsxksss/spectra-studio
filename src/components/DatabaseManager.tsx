@@ -74,6 +74,82 @@ type SavedConnection = {
     };
 };
 
+const ConnectionHoverCard = ({ connection, rect }: { connection: SavedConnection, rect: DOMRect }) => {
+    if (!rect) return null;
+
+    const top = rect.top;
+    const left = rect.right + 12; // 12px gap
+    const Icon = getDatabaseIcon(connection.type);
+    const iconColor = getDatabaseIconColor(connection.type);
+
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: top,
+                left: left,
+                zIndex: 50
+            }}
+            className="pointer-events-none"
+        >
+            <motion.div
+                initial={{ opacity: 0, x: -10, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -10, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="w-64 bg-[#18181b]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 overflow-hidden relative"
+            >
+                {/* Glass Reflection */}
+                <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-white/10 relative z-10">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-black/20 ${iconColor} shadow-inner`}>
+                        <Icon size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-gray-100 truncate text-sm">{connection.name}</h4>
+                        <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${['Redis', 'MySQL', 'PostgreSQL', 'MongoDB', 'SQLite'].includes(connection.type) ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                            {connection.type}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-2.5 text-xs relative z-10">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500 font-medium">Host</span>
+                        <span className="text-gray-300 font-mono truncate max-w-[120px] bg-white/5 px-1.5 py-0.5 rounded">{connection.host}</span>
+                    </div>
+                    {connection.port && connection.port !== '0' && (
+                        <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-medium">Port</span>
+                            <span className="text-gray-300 font-mono bg-white/5 px-1.5 py-0.5 rounded">{connection.port}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500 font-medium">User</span>
+                        <span className="text-gray-300 font-mono truncate max-w-[120px]">{connection.username || <span className="text-gray-600 italic">None</span>}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500 font-medium">Database</span>
+                        <span className="text-gray-300 font-mono truncate max-w-[120px]">{connection.database || <span className="text-gray-600 italic">Default</span>}</span>
+                    </div>
+                </div>
+
+                {/* SSH Badge if enabled */}
+                {connection.ssh?.enabled && (
+                    <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-2 text-[10px] text-blue-400 relative z-10">
+                        <Shield size={12} />
+                        <span className="font-mono uppercase tracking-wider">SSH Tunnel Active</span>
+                    </div>
+                )}
+            </motion.div>
+        </div>
+    );
+};
+
 const ServiceSelect = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const [isOpen, setIsOpen] = useState(false);
     const services = [
@@ -436,6 +512,8 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         });
     };
 
+    const [hoveredConn, setHoveredConn] = useState<{ data: SavedConnection, rect: DOMRect } | null>(null);
+
     const handleEditConnection = () => {
         const conn = contextMenu.conn;
         if (!conn) return;
@@ -487,7 +565,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         try {
             let res;
             const portNum = parseInt(portStr);
-            const passwordArg = passStr || null;
+            const passwordArg = passStr || "";
             const usernameArg = usernameStr || '';
             const dbArg = dbNameStr || null;
 
@@ -673,6 +751,8 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                         onClick={() => loadConnection(conn)}
                                         onDoubleClick={() => handleDoubleClick(conn)}
                                         onContextMenu={(e) => handleContextMenu(e, conn)}
+                                        onMouseEnter={(e) => setHoveredConn({ data: conn, rect: e.currentTarget.getBoundingClientRect() })}
+                                        onMouseLeave={() => setHoveredConn(null)}
                                         className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
                                     >
                                         <div className="flex items-center gap-2 mb-1">
@@ -716,6 +796,8 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                             onClick={() => loadConnection(conn)}
                                             onDoubleClick={() => handleDoubleClick(conn)}
                                             onContextMenu={(e) => handleContextMenu(e, conn)}
+                                            onMouseEnter={(e) => setHoveredConn({ data: conn, rect: e.currentTarget.getBoundingClientRect() })}
+                                            onMouseLeave={() => setHoveredConn(null)}
                                             className={`w-full relative text-left p-3 rounded-xl transition-all border border-transparent hover:border-white/5 hover:bg-white/5 group cursor-pointer ${editingId === conn.id ? 'bg-white/5 border-white/10' : ''}`}
                                         >
                                             <div className="flex items-center gap-2 mb-1">
@@ -1301,6 +1383,12 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                     isVisible={toast.isVisible}
                     onClose={hideToast}
                 />
+
+                <AnimatePresence>
+                    {hoveredConn && (
+                        <ConnectionHoverCard connection={hoveredConn.data} rect={hoveredConn.rect} />
+                    )}
+                </AnimatePresence>
             </div >
         </div >
     );
