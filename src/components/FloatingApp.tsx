@@ -46,7 +46,7 @@ import { useTheme } from '../contexts/ThemeContext';
 
 export default function FloatingApp() {
     const { t } = useTranslation();
-    const { currentThemeColor, setConnectedDatabase } = useTheme();
+    const { themeSettings, currentThemeColor, setConnectedDatabase } = useTheme();
     const [viewMode, setViewMode] = useState<'toolbar' | 'collapsed' | 'expanded'>('toolbar');
     const [connectedService, setConnectedService] = useState<string | null>(null);
     const [currentConnectionName, setCurrentConnectionName] = useState<string>("");
@@ -544,19 +544,22 @@ export default function FloatingApp() {
                     style={{
                         opacity: showBackground ? bgOpacity : 0,
                         borderRadius: `${currentUiSize.r}px`,
+                        backgroundColor: themeSettings.isStaticBackground ? (themeSettings.staticBackgroundColor || appliedThemeColor) : 'transparent',
                         transitionDelay: (showBackground && bgOpacity === 1) ? '150ms' : '0ms',
                         transitionDuration: showBackground ? '200ms' : '0ms',
                         transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)'
                     }}
                 >
-                    <Silk
-                        key={appliedThemeColor}
-                        speed={5}
-                        scale={1}
-                        color={appliedThemeColor}
-                        noiseIntensity={1.5}
-                        rotation={2}
-                    />
+                    {!themeSettings.isStaticBackground && (
+                        <Silk
+                            key={appliedThemeColor}
+                            speed={5}
+                            scale={1}
+                            color={appliedThemeColor}
+                            noiseIntensity={1.5}
+                            rotation={2}
+                        />
+                    )}
                 </div>
 
                 <ClickSpark

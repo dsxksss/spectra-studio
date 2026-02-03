@@ -290,7 +290,9 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         setThemeMode,
         setAutoFollowDatabase,
         setPresetColor,
-        setCustomColor
+        setCustomColor,
+        setStaticBackground,
+        setStaticBackgroundColor
     } = useTheme();
     const [selectedService, setSelectedService] = useState(activeService || 'PostgreSQL');
     const [showPassword, setShowPassword] = useState(false);
@@ -1346,6 +1348,62 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                                     </div>
                                                 </motion.div>
                                             )}
+
+                                            {/* Static Background Toggle */}
+                                            <div className="space-y-3 bg-white/5 rounded-xl p-4 border border-white/5">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm text-gray-300">{t('static_background')}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">{t('static_background_desc')}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setStaticBackground(!themeSettings.isStaticBackground)}
+                                                        className={`relative w-12 h-7 rounded-full transition-colors ${themeSettings.isStaticBackground
+                                                            ? 'bg-blue-500'
+                                                            : 'bg-white/10'
+                                                            }`}
+                                                    >
+                                                        <div
+                                                            className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all ${themeSettings.isStaticBackground ? 'left-6' : 'left-1'
+                                                                }`}
+                                                        />
+                                                    </button>
+                                                </div>
+
+                                                <AnimatePresence>
+                                                    {themeSettings.isStaticBackground && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                            animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                                                            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                            className="pt-3 border-t border-white/5 space-y-3"
+                                                        >
+                                                            <label className="text-sm text-gray-400">{t('static_background_color')}</label>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="color"
+                                                                        value={themeSettings.staticBackgroundColor}
+                                                                        onChange={(e) => setStaticBackgroundColor(e.target.value)}
+                                                                        className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white/10 bg-transparent"
+                                                                    />
+                                                                </div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={themeSettings.staticBackgroundColor}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) {
+                                                                            setStaticBackgroundColor(val);
+                                                                        }
+                                                                    }}
+                                                                    className="flex-1 h-9 bg-[#18181b] border border-white/10 rounded-lg px-3 text-gray-200 font-mono text-xs focus:outline-none focus:border-blue-500/50 transition-all"
+                                                                />
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
                                         </div>
 
                                         {/* Connection Settings */}

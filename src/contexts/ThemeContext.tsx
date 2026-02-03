@@ -29,6 +29,8 @@ interface ThemeSettings {
     autoFollowDatabase: boolean;   // Whether to follow database theme color
     presetColorId: string;         // Selected preset color ID
     customColor: string;           // Custom color value (hex)
+    isStaticBackground: boolean;   // Whether to use a static background instead of an animated one
+    staticBackgroundColor: string; // The color for the static background
 }
 
 interface ThemeContextType {
@@ -40,6 +42,8 @@ interface ThemeContextType {
     setAutoFollowDatabase: (follow: boolean) => void;
     setPresetColor: (colorId: string) => void;
     setCustomColor: (color: string) => void;
+    setStaticBackground: (isStatic: boolean) => void;
+    setStaticBackgroundColor: (color: string) => void;
     saveThemeSettings: () => void;
 }
 
@@ -47,7 +51,9 @@ const defaultSettings: ThemeSettings = {
     mode: 'auto',
     autoFollowDatabase: true,
     presetColorId: 'default',
-    customColor: '#364774'
+    customColor: '#364774',
+    isStaticBackground: false,
+    staticBackgroundColor: '#1b1e27'
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -104,6 +110,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeSettings(prev => ({ ...prev, customColor: color }));
     }, []);
 
+    const setStaticBackground = useCallback((isStatic: boolean) => {
+        setThemeSettings(prev => ({ ...prev, isStaticBackground: isStatic }));
+    }, []);
+
+    const setStaticBackgroundColor = useCallback((color: string) => {
+        setThemeSettings(prev => ({ ...prev, staticBackgroundColor: color }));
+    }, []);
+
     const saveThemeSettings = useCallback(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(themeSettings));
     }, [themeSettings]);
@@ -124,6 +138,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
                 setAutoFollowDatabase,
                 setPresetColor,
                 setCustomColor,
+                setStaticBackground,
+                setStaticBackgroundColor,
                 saveThemeSettings
             }}
         >

@@ -405,11 +405,11 @@ async fn connect_redis(
     port: u16,
     password: Option<String>,
     timeout_sec: Option<u64>,
-    sshConfig: Option<SshConfig>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     
-    let (final_host, final_port) = if let Some(ssh) = sshConfig {
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("redis".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -448,14 +448,14 @@ async fn connect_mysql(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
-    sshConfig: Option<SshConfig>, 
+    ssh_config: Option<SshConfig>, 
 ) -> Result<String, String> {
     use sqlx::mysql::MySqlConnectOptions;
 
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "mysql".to_string());
 
-    let (final_host, final_port) = if let Some(ssh) = sshConfig {
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("mysql".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -495,14 +495,14 @@ async fn connect_postgres(
     password: Option<String>,
     database: Option<String>,
     timeout_sec: Option<u64>,
-    sshConfig: Option<SshConfig>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     let db = database.unwrap_or_else(|| "postgres".to_string());
 
-    let (final_host, final_port) = if let Some(ssh) = sshConfig {
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("postgres".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
@@ -543,11 +543,11 @@ async fn connect_mongodb(
     username: Option<String>,
     password: Option<String>,
     timeout_sec: Option<u64>,
-    sshConfig: Option<SshConfig>,
+    ssh_config: Option<SshConfig>,
 ) -> Result<String, String> {
     let timeout_val = Duration::from_secs(timeout_sec.unwrap_or(5));
     
-    let (final_host, final_port) = if let Some(ssh) = sshConfig {
+    let (final_host, final_port) = if let Some(ssh) = ssh_config {
         let (local_port, handle) = establish_ssh_tunnel(ssh, host.clone(), port).await?;
         state.ssh_sessions.lock().unwrap().insert("mongodb".to_string(), handle);
         ("127.0.0.1".to_string(), local_port)
