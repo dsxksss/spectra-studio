@@ -8,9 +8,10 @@ interface TooltipProps {
     position?: 'top' | 'bottom' | 'left' | 'right';
     delay?: number;
     className?: string;
+    triggerClassName?: string;
 }
 
-export const Tooltip = ({ content, children, position = 'top', delay = 0.2, className = '' }: TooltipProps) => {
+export const Tooltip = ({ content, children, position = 'top', delay = 0.2, className = '', triggerClassName = '' }: TooltipProps) => {
     const [isVisible, setIsVisible] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
     const triggerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +108,7 @@ export const Tooltip = ({ content, children, position = 'top', delay = 0.2, clas
         <>
             <div
                 ref={triggerRef}
-                className="inline-flex w-fit h-fit" // w-fit h-fit to tightly wrap children
+                className={`inline-flex w-fit h-fit ${triggerClassName}`} // w-fit h-fit to tightly wrap children
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
             // onMouseDown={() => setIsVisible(false)} // Optional: hide on click

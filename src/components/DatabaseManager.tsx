@@ -1108,10 +1108,10 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                             placeholder={t('enter_password')}
                                             className="w-full h-[46px] bg-[#121214] border border-white/5 rounded-xl px-5 text-gray-200 focus:outline-none focus:border-blue-500/40 focus:ring-4 focus:ring-blue-500/10 transition-all font-mono text-sm placeholder:text-gray-700 shadow-inner flex items-center"
                                         />
-                                        <Tooltip content={showPassword ? t('hide_password') : t('show_password')} position="left">
+                                        <Tooltip content={showPassword ? t('hide_password') : t('show_password')} position="left" triggerClassName="absolute right-4 top-1/2 -translate-y-1/2">
                                             <button
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                                                className="text-gray-500 hover:text-gray-300 transition-colors"
                                             >
                                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                             </button>
