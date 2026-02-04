@@ -37,6 +37,8 @@ export const resources = {
             mongodb: "MongoDB",
 
             // Messages
+            connecting: "Connecting",
+            establishing_connection: "Establishing secure connection to {{host}}",
             connection_success: "Connection Successful",
             connection_failed: "Connection Failed",
             confirm_delete: "Are you sure you want to delete this?",
@@ -235,6 +237,8 @@ export const resources = {
             mongodb: "MongoDB",
 
             // Messages
+            connecting: "正在连接",
+            establishing_connection: "正在建立与 {{host}} 的安全连接",
             connection_success: "连接成功",
             connection_failed: "连接失败",
             confirm_delete: "确认删除吗？",

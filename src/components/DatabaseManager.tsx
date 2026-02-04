@@ -333,6 +333,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
     const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isConnecting, setIsConnecting] = useState(false);
+    const [connectingInfo, setConnectingInfo] = useState<{ service: string, host: string } | null>(null);
 
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
@@ -565,6 +566,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
 
     const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false, nameOverride?: string, sshConfigOverride?: any) => {
         setIsConnecting(true);
+        setConnectingInfo({ service, host: hostStr });
         try {
             let res;
             const portNum = parseInt(portStr);
@@ -661,6 +663,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
             showToast(`Connection Failed: ${err}`, 'error');
         } finally {
             setIsConnecting(false);
+            setConnectingInfo(null);
         }
     };
 
@@ -1168,6 +1171,91 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         <span>{editingId ? t('save') : t('save')}</span>
                     </motion.button>
                 </motion.div >
+
+                {/* Connection Loading Overlay */}
+                <AnimatePresence>
+                    {isConnecting && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#09090b]/80 backdrop-blur-md"
+                        >
+                            <div className="relative flex flex-col items-center gap-8">
+                                {/* Large Animated Background Ring */}
+                                <div className="relative w-32 h-32">
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                        className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500/40 border-b-blue-500/40 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
+                                    />
+                                    <motion.div
+                                        animate={{ rotate: -360 }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                        className="absolute inset-4 rounded-full border-2 border-transparent border-l-blue-400 border-r-blue-400 opacity-60"
+                                    />
+                                    <motion.div
+                                        animate={{ scale: [0.95, 1.05, 0.95], opacity: [0.3, 0.6, 0.3] }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                        className="absolute inset-8 bg-blue-500/20 rounded-full blur-xl"
+                                    />
+
+                                    {/* Central Icon */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <motion.div
+                                            animate={{ y: [0, -6, 0] }}
+                                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                        >
+                                            {(() => {
+                                                const IconComponent = getDatabaseIcon(connectingInfo?.service || selectedService);
+                                                return <IconComponent size={44} className="text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" />;
+                                            })()}
+                                        </motion.div>
+                                    </div>
+                                </div>
+
+                                {/* Info & Message */}
+                                <div className="flex flex-col items-center gap-4 text-center">
+                                    <div className="space-y-2">
+                                        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+                                            {t('connecting')}
+                                            <div className="flex gap-1">
+                                                {[0, 1, 2].map((i) => (
+                                                    <motion.span
+                                                        key={i}
+                                                        animate={{ opacity: [0.3, 1, 0.3] }}
+                                                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                                                    >
+                                                        .
+                                                    </motion.span>
+                                                ))}
+                                            </div>
+                                        </h2>
+                                        <p className="text-gray-400 text-sm max-w-[280px] leading-relaxed">
+                                            {t('establishing_connection').replace('{{host}}', connectingInfo?.host || host)}
+                                        </p>
+                                    </div>
+
+                                    {/* Progress Step Indicator (Decorative) */}
+                                    <div className="flex items-center gap-1.5 px-4 py-1.5 bg-white/5 rounded-full border border-white/5 mt-2">
+                                        <RefreshCw size={10} className="text-blue-400 animate-spin" />
+                                        <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-widest">{t('secure_env')}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tips or Quote */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 1 }}
+                                className="absolute bottom-12 text-[10px] text-gray-600 font-mono tracking-wider italic"
+                            >
+                                This may take a few seconds depending on your network...
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Settings Modal */}
                 <AnimatePresence>

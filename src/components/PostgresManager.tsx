@@ -102,8 +102,8 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
     const [expandedDatabases, setExpandedDatabases] = useState<Set<string>>(new Set());
     const [databaseSizes, setDatabaseSizes] = useState<Record<string, number>>({});
     const [views, setViews] = useState<string[]>([]);
-    const [functions, setFunctions] = useState<string[]>([]);
-    const [procedures, setProcedures] = useState<string[]>([]);
+    const [functions, setFunctions] = useState<[string, string][]>([]);
+    const [procedures, setProcedures] = useState<[string, string][]>([]);
     const [showSystemDatabases, setShowSystemDatabases] = useState(false);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['tables']));
     const [tableSizes, setTableSizes] = useState<Record<string, number>>({});
@@ -377,10 +377,10 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
             try {
                 const viewsRes = await invoke<string[]>('postgres_get_views');
                 setViews(viewsRes.sort());
-                const funcsRes = await invoke<string[]>('postgres_get_functions');
-                setFunctions(funcsRes.sort());
-                const procsRes = await invoke<string[]>('postgres_get_procedures');
-                setProcedures(procsRes.sort());
+                const funcsRes = await invoke<[string, string][]>('postgres_get_functions');
+                setFunctions(funcsRes);
+                const procsRes = await invoke<[string, string][]>('postgres_get_procedures');
+                setProcedures(procsRes);
             } catch (objErr) {
                 console.warn("Failed to fetch additional objects", objErr);
             }
@@ -446,14 +446,14 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
 
             // Fetch functions
             try {
-                const funcsRes = await invoke<string[]>('postgres_get_functions');
-                setFunctions(funcsRes.sort());
+                const funcsRes = await invoke<[string, string][]>('postgres_get_functions');
+                setFunctions(funcsRes);
             } catch { setFunctions([]); }
 
             // Fetch procedures
             try {
-                const procsRes = await invoke<string[]>('postgres_get_procedures');
-                setProcedures(procsRes.sort());
+                const procsRes = await invoke<[string, string][]>('postgres_get_procedures');
+                setProcedures(procsRes);
             } catch { setProcedures([]); }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
@@ -1439,10 +1439,10 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
                                                                 exit={{ height: 0, opacity: 0 }}
                                                                 className="overflow-hidden"
                                                             >
-                                                                {functions.map(func => (
-                                                                    <div key={func} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                {functions.map(([name, id]) => (
+                                                                    <div key={id} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
                                                                         <Hash size={12} className="opacity-50" />
-                                                                        <span className="truncate">{func}</span>
+                                                                        <span className="truncate" title={name}>{name}</span>
                                                                     </div>
                                                                 ))}
                                                             </motion.div>
@@ -1467,10 +1467,10 @@ export default function PostgresManager({ onDisconnect, onDragStart, connectionN
                                                                 exit={{ height: 0, opacity: 0 }}
                                                                 className="overflow-hidden"
                                                             >
-                                                                {procedures.map(proc => (
-                                                                    <div key={proc} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
+                                                                {procedures.map(([name, id]) => (
+                                                                    <div key={id} className="flex items-center gap-2 px-3 py-1.5 ml-4 text-xs text-gray-500">
                                                                         <Terminal size={12} className="opacity-50" />
-                                                                        <span className="truncate">{proc}</span>
+                                                                        <span className="truncate" title={name}>{name}</span>
                                                                     </div>
                                                                 ))}
                                                             </motion.div>

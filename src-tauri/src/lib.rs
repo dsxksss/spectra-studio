@@ -1058,33 +1058,33 @@ async fn postgres_get_views(state: State<'_, AppState>) -> Result<Vec<String>, S
 }
 
 #[tauri::command]
-async fn postgres_get_functions(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+async fn postgres_get_functions(state: State<'_, AppState>) -> Result<Vec<(String, String)>, String> {
     let pool = {
         let guard = state.pg_pool.lock().unwrap();
         guard.clone().ok_or("Not connected")?
     };
 
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT routine_name::text FROM information_schema.routines WHERE routine_type = 'FUNCTION' AND routine_schema = 'public'")
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT routine_name::text, specific_name::text FROM information_schema.routines WHERE routine_type = 'FUNCTION' AND routine_schema = 'public' ORDER BY routine_name")
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows.into_iter().map(|(name,)| name).collect())
+    Ok(rows)
 }
 
 #[tauri::command]
-async fn postgres_get_procedures(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+async fn postgres_get_procedures(state: State<'_, AppState>) -> Result<Vec<(String, String)>, String> {
     let pool = {
         let guard = state.pg_pool.lock().unwrap();
         guard.clone().ok_or("Not connected")?
     };
 
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT routine_name::text FROM information_schema.routines WHERE routine_type = 'PROCEDURE' AND routine_schema = 'public'")
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT routine_name::text, specific_name::text FROM information_schema.routines WHERE routine_type = 'PROCEDURE' AND routine_schema = 'public' ORDER BY routine_name")
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows.into_iter().map(|(name,)| name).collect())
+    Ok(rows)
 }
 
 #[tauri::command]
