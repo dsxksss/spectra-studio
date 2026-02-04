@@ -98,7 +98,7 @@ const ConnectionHoverCard = ({ connection, rect }: { connection: SavedConnection
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -10, scale: 0.95 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="w-64 bg-[#18181b]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 overflow-hidden relative"
+                className="w-72 bg-[#18181b]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 overflow-hidden relative"
             >
                 {/* Glass Reflection */}
                 <div className="absolute inset-0 bg-white/5 pointer-events-none" />
@@ -109,8 +109,8 @@ const ConnectionHoverCard = ({ connection, rect }: { connection: SavedConnection
                         <Icon size={20} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-100 truncate text-sm">{connection.name}</h4>
-                        <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1.5">
+                        <h4 className="font-bold text-gray-100 text-sm leading-tight break-words">{connection.name}</h4>
+                        <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1.5 mt-1">
                             <span className={`w-1.5 h-1.5 rounded-full ${['Redis', 'MySQL', 'PostgreSQL', 'MongoDB', 'SQLite'].includes(connection.type) ? 'bg-green-500' : 'bg-gray-500'}`}></span>
                             {connection.type}
                         </span>
@@ -598,7 +598,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                     res = await invoke('connect_redis', {
                         host: hostStr,
                         port: portNum,
-                        password: passwordArg,
+                        password: passwordArg || null,
                         timeout_sec: timeoutSec,
                         sshConfig
                     });
@@ -629,8 +629,8 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                     res = await invoke('connect_mongodb', {
                         host: hostStr,
                         port: portNum,
-                        username: usernameArg || null, // Allow empty user for mongo
-                        password: passwordArg,
+                        username: usernameArg || null,
+                        password: passwordArg || null,
                         timeout_sec: timeoutSec,
                         sshConfig
                     });
@@ -1168,7 +1168,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         className="flex items-center gap-2 px-8 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
                     >
                         <Save size={18} />
-                        <span>{editingId ? t('save') : t('save')}</span>
+                        <span>{editingId ? t('update') : t('save')}</span>
                     </motion.button>
                 </motion.div >
 
