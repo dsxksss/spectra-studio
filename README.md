@@ -1,114 +1,115 @@
-# Tauri 2.0 + Next.js 16 App Router Template
+# Spectra Studio (光谱工坊)
 
-![Tauri window screenshot](public/tauri-nextjs-template-2_screenshot.png)
+<p align="center">
+  <img src="src/assets/logo.png" alt="Spectra Studio Logo" width="120" />
+</p>
 
-This is a [Tauri](https://v2.tauri.app/) project template using [Next.js](https://nextjs.org/),
-bootstrapped by combining [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app)
-and [`create tauri-app`](https://v2.tauri.app/start/create-project/).
+<p align="center">
+  <strong>A high-performance, aesthetically pleasing database management client built for developers who care about design.</strong>
+</p>
 
-This template uses [`pnpm`](https://pnpm.io/) as the Node.js dependency
-manager, and uses the [App Router](https://nextjs.org/docs/app) model for Next.js.
+<p align="center">
+  <img src="https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat-square&logo=tauri" alt="Tauri" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite" alt="Vite" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
+</p>
 
-## Template Features
+---
 
-- TypeScript frontend using [Next.js 16](https://nextjs.org/) React framework
-- [TailwindCSS 4](https://tailwindcss.com/) as a utility-first atomic CSS framework
-  - The example page in this template app has been updated to use only TailwindCSS
-  - While not included by default, consider using
-    [React Aria components](https://react-spectrum.adobe.com/react-aria/index.html)
-    and/or [HeadlessUI components](https://headlessui.com/) for completely unstyled and
-    fully accessible UI components, which integrate nicely with TailwindCSS
-- Opinionated formatting and linting already setup and enabled
-  - [Biome](https://biomejs.dev/) for a combination of fast formatting, linting, and
-    import sorting of TypeScript code
-  - [clippy](https://github.com/rust-lang/rust-clippy) and
-    [rustfmt](https://github.com/rust-lang/rustfmt) for Rust code
-- GitHub Actions to check code formatting and linting for both TypeScript and Rust
+[English](./README.md) | [简体中文](./README_zh.md)
 
-## Getting Started
+**Spectra Studio** is a modern database management tool that combines native performance with a premium, glassmorphism-inspired user interface. Designed to be lightweight and fast, it provides a seamless experience for managing your data across multiple database engines.
 
-### Running development server and use Tauri window
+## 📥 Download
 
-After cloning for the first time, change your app identifier inside
-`src-tauri/tauri.conf.json` to your own:
+Get the latest version of Spectra Studio for your platform:
 
-```jsonc
-{
-  // ...
-  // The default "com.tauri.dev" will prevent you from building in release mode
-  "identifier": "com.my-application-name.app",
-  // ...
-}
-```
+| Platform | Download |
+| :--- | :--- |
+| **Windows** (x64) | [**Spectra Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
+| **macOS** | [Coming Soon...]|
+| **Linux** | [Coming Soon...]|
 
-To develop and run the frontend in a Tauri window:
+> [!NOTE]
+> For all versions and release notes, please visit the [Releases](https://github.com/your-username/spectra-studio/releases) page.
 
-```shell
-pnpm tauri dev
-```
+## ✨ Features
 
-This will load the Next.js frontend directly in a Tauri webview window, in addition to
-starting a development server on `localhost:3000`.
-Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> in a Chromium based WebView (e.g. on
-Windows) to open the web developer console from the Tauri window.
+### 🛠 Supported Databases
+- **PostgreSQL**: Robust support for schemas, tables, views, and functions.
+- **MySQL**: Full-featured management for your MySQL instances.
+- **SQLite**: Local file management with a clean, intuitive interface.
+- **Redis**: Specialized key-value browser supporting Strings, Hashes, Lists, and more.
 
-### Building for release
+### 🎨 Premium Design & UX
+- **Glassmorphism UI**: A beautiful, modern interface with depth and translucency.
+- **Dynamic Themes**: Interactive "Silk" background animations and customizable color palettes.
+- **Database-Aware Themes**: Automatically adjusts the app's accent color based on the connected database type.
+- **Micro-interactions**: Smooth transitions and hover effects powered by Framer Motion and Three.js.
 
-To export the Next.js frontend via SSG and build the Tauri application for release:
+### 🔐 Security & Connectivity
+- **SSH Tunneling**: Built-in support for secure connections to remote databases via SSH.
+- **Native Performance**: Compiled with Rust (Tauri), ensuring low resource usage and high responsiveness.
 
-```shell
-pnpm tauri build
-```
+### 📊 Advanced Management
+- **Smart Data Grid**: Interactive table browser with batch editing, search, and filtering.
+- **SQL Console**: Powerful editor for running custom queries and viewing results in real-time.
+- **I18n**: Fully localized in English and Chinese.
 
-### Source structure
+## 📸 Screenshots
 
-Next.js frontend source files are located in `src/` and Tauri Rust application source
-files are located in `src-tauri/`. Please consult the Next.js and Tauri documentation
-respectively for questions pertaining to either technology.
+*(Add your screenshots here to wow your users!)*
 
-## Caveats
+| New Connection | Data Explorer |
+| :---: | :---: |
+| ![Connection](https://github.com/user-attachments/assets/your-connection-screenshot-id) | ![Explorer](https://github.com/user-attachments/assets/your-explorer-screenshot-id) |
 
-### Static Site Generation / Pre-rendering
+## 🚀 Getting Started
 
-Next.js is a great React frontend framework which supports server-side rendering (SSR)
-as well as static site generation (SSG or pre-rendering). For the purposes of creating a
-Tauri frontend, only SSG can be used since SSR requires an active Node.js server.
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [Rust](https://www.rust-lang.org/) (v1.75+)
+- [pnpm](https://pnpm.io/) (recommended)
 
-Please read into the Next.js documentation for [Static Exports](https://nextjs.org/docs/app/building-your-application/deploying/static-exports)
-for an explanation of supported / unsupported features and caveats.
+### Installation
 
-### `next/image`
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/spectra-studio.git
+   cd spectra-studio
+   ```
 
-The [`next/image` component](https://nextjs.org/docs/basic-features/image-optimization)
-is an enhancement over the regular `<img>` HTML element with server-side optimizations
-to dynamically scale the image quality. This is only supported when deploying the
-frontend onto Vercel directly, and must be disabled to properly export the frontend
-statically. As such, the
-[`unoptimized` property](https://nextjs.org/docs/api-reference/next/image#unoptimized)
-is set to true for the `next/image` component in the `next.config.js` configuration.
-This will allow the image to be served as-is, without changes to its quality, size,
-or format.
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
 
-### ReferenceError: window/navigator is not defined
+3. **Run in development mode**
+   ```bash
+   pnpm tauri dev
+   ```
 
-If you are using Tauri's `invoke` function or any OS related Tauri function from within
-JavaScript, you may encounter this error when importing the function in a global,
-non-browser context. This is due to the nature of Next.js' dev server effectively
-running a Node.js server for SSR and hot module replacement (HMR), and Node.js does not
-have a notion of `window` or `navigator`.
+4. **Build for production**
+   ```bash
+   pnpm tauri build
+   ```
 
-The solution is to ensure that the Tauri functions are imported as late as possible
-from within a client-side React component, or via [lazy loading](https://nextjs.org/docs/app/building-your-application/optimizing/lazy-loading).
+## 🛠 Tech Stack
 
-## Learn More
+- **Frontend**: [React](https://react.dev/), [Vite](https://vitejs.dev/)
+- **Backend**: [Tauri 2.0](https://v2.tauri.app/) (Rust)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Animations**: [Framer Motion](https://www.framer.com/motion/), [Three.js](https://threejs.org/)
+- **Icons**: [HugeIcons](https://hugeicons.com/), [Lucide](https://lucide.dev/)
 
-To learn more about Next.js, take a look at the following resources:
+## 📄 License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and
-  API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-And to learn more about Tauri, take a look at the following resources:
+---
 
-- [Tauri Documentation - Guides](https://v2.tauri.app/start/) - learn about the Tauri
-  toolkit.
+<p align="center">
+  Made with ❤️ by the Spectra Studio Team
+</p>
