@@ -59,8 +59,6 @@ Get the latest version of Spectra Studio for your platform:
 
 ## 📸 Screenshots
 
-*(Add your screenshots here to wow your users!)*
-
 | New Connection | Data Explorer |
 | :---: | :---: |
 | ![Connection](docs/connectd.png) | ![Explorer](docs/home.png) |
