@@ -106,7 +106,3 @@
 本项目基于 MIT 协议开源 - 详情请参阅 [LICENSE](LICENSE) 文件。
 
 ---
-
-<p align="center">
-  由 Spectra Studio 团队用心打造 ❤️
-</p>
