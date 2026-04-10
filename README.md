@@ -28,12 +28,11 @@ Get the latest version of Spectra Studio for your platform:
 
 | Platform | Download |
 | :--- | :--- |
-| **Windows** (x64) | [**Spectra Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
-| **macOS** | [Coming Soon...]|
-| **Linux** | [Coming Soon...]|
+| **Windows** (x64) | [**Spectra.Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
+| **macOS / Linux** | Coming Soon |
 
 > [!NOTE]
-> For all versions and release notes, please visit the [Releases](https://github.com/your-username/spectra-studio/releases) page.
+> For all versions and release notes, please visit the [Releases](https://github.com/dsxksss/spectra-studio/releases) page.
 
 ## ✨ Features
 
@@ -64,7 +63,7 @@ Get the latest version of Spectra Studio for your platform:
 
 | New Connection | Data Explorer |
 | :---: | :---: |
-| ![Connection](https://github.com/user-attachments/assets/your-connection-screenshot-id) | ![Explorer](https://github.com/user-attachments/assets/your-explorer-screenshot-id) |
+| ![Connection](docs/connectd.png) | ![Explorer](docs/home.png) |
 
 ## 🚀 Getting Started
 
@@ -77,7 +76,7 @@ Get the latest version of Spectra Studio for your platform:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/spectra-studio.git
+   git clone https://github.com/dsxksss/spectra-studio.git
    cd spectra-studio
    ```
 

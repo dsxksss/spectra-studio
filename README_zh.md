@@ -28,12 +28,11 @@
 
 | 平台 | 下载链接 |
 | :--- | :--- |
-| **Windows** (x64) | [**Spectra Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
-| **macOS** | [即将推出...]|
-| **Linux** | [即将推出...]|
+| **Windows** (x64) | [**Spectra.Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
+| **macOS / Linux** | 即将推出 |
 
 > [!NOTE]
-> 查看所有历史版本和更新日志，请访问 [Releases](https://github.com/your-username/spectra-studio/releases) 页面。
+> 查看所有历史版本和更新日志，请访问 [Releases](https://github.com/dsxksss/spectra-studio/releases) 页面。
 
 ## ✨ 特性
 
@@ -64,7 +63,7 @@
 
 | 新建连接 | 数据浏览 |
 | :---: | :---: |
-| ![连接界面](https://github.com/user-attachments/assets/your-connection-screenshot-id) | ![数据浏览](https://github.com/user-attachments/assets/your-explorer-screenshot-id) |
+| ![连接界面](docs/connectd.png) | ![数据浏览](docs/home.png) |
 
 ## 🚀 快速开始
 
@@ -77,7 +76,7 @@
 
 1. **克隆仓库**
    ```bash
-   git clone https://github.com/your-username/spectra-studio.git
+   git clone https://github.com/dsxksss/spectra-studio.git
    cd spectra-studio
    ```
 
