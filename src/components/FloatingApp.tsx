@@ -18,7 +18,7 @@ import {
     SQLiteIcon
 } from "./icons";
 import { Tooltip } from "./Tooltip";
-import { getCurrentWindow, LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
@@ -168,8 +168,8 @@ export default function FloatingApp() {
             }
 
             await Promise.all([
-                appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
-                appWindow.setSize(new PhysicalSize(Math.round(targetW), Math.round(targetH)))
+                appWindow.setPosition(new LogicalPosition(newX, newY)),
+                appWindow.setSize(new LogicalSize(targetW, targetH))
             ]);
 
             setCurrentUiSize(UI_SIZES.expanded);
@@ -184,8 +184,8 @@ export default function FloatingApp() {
             const [waX, waY, waW, waH] = workArea;
 
             await Promise.all([
-                appWindow.setPosition(new PhysicalPosition(Math.round(waX), Math.round(waY))),
-                appWindow.setSize(new PhysicalSize(Math.round(waW), Math.round(waH)))
+                appWindow.setPosition(new LogicalPosition(waX, waY)),
+                appWindow.setSize(new LogicalSize(waW, waH))
             ]);
 
             // We don't update UI_SIZES.expanded so we can restore later
