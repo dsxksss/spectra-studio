@@ -431,7 +431,7 @@ fn get_screen_work_area(window: tauri::Window) -> (f64, f64, f64, f64) {
 }
 
 #[tauri::command]
-fn get_all_monitors_work_area(window: tauri::Window) -> Vec<(f64, f64, f64, f64)> {
+fn get_all_monitors_work_area(_window: tauri::Window) -> Vec<(f64, f64, f64, f64)> {
   #[cfg(target_os = "windows")]
   {
     unsafe extern "system" fn monitor_enum_proc(

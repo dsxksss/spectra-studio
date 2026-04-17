@@ -23,18 +23,18 @@
 
 ## 📸 Screenshots
 
-| New Connection | Data Explorer |
-| :---: | :---: |
+|          New Connection          |       Data Explorer        |
+| :------------------------------: | :------------------------: |
 | ![Connection](docs/connectd.png) | ![Explorer](docs/home.png) |
 
 ## 📥 Download
 
 Get the latest version of Spectra Studio for your platform:
 
-| Platform | Download |
-| :--- | :--- |
-| **Windows** (x64) | [**Spectra.Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.4/Spectra.Studio_0.3.4_x64-setup.exe) |
-| **macOS / Linux** | Coming Soon |
+| Platform          | Download                                                                                                                                        |
+| :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Windows** (x64) | [**Spectra.Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.5/Spectra.Studio_0.3.5_x64-setup.exe) |
+| **macOS / Linux** | Coming Soon                                                                                                                                     |
 
 > [!NOTE]
 > For all versions and release notes, please visit the [Releases](https://github.com/dsxksss/spectra-studio/releases) page.
@@ -42,30 +42,34 @@ Get the latest version of Spectra Studio for your platform:
 ## ✨ Features
 
 ### 🛠 Supported Databases
+
 - **PostgreSQL**: Robust support for schemas, tables, views, and functions.
 - **MySQL**: Full-featured management for your MySQL instances.
 - **SQLite**: Local file management with a clean, intuitive interface.
 - **Redis**: Specialized key-value browser supporting Strings, Hashes, Lists, and more.
 
 ### 🎨 Premium Design & UX
+
 - **Glassmorphism UI**: A beautiful, modern interface with depth and translucency.
 - **Dynamic Themes**: Interactive "Silk" background animations and customizable color palettes.
 - **Database-Aware Themes**: Automatically adjusts the app's accent color based on the connected database type.
 - **Micro-interactions**: Smooth transitions and hover effects powered by Framer Motion and Three.js.
 
 ### 🔐 Security & Connectivity
+
 - **SSH Tunneling**: Built-in support for secure connections to remote databases via SSH.
 - **Native Performance**: Compiled with Rust (Tauri), ensuring low resource usage and high responsiveness.
 
 ### 📊 Advanced Management
+
 - **Smart Data Grid**: Interactive table browser with batch editing, search, and filtering.
 - **SQL Console**: Powerful editor for running custom queries and viewing results in real-time.
 - **I18n**: Fully localized in English and Chinese.
 
-
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://www.rust-lang.org/) (v1.75+)
 - [pnpm](https://pnpm.io/) (recommended)
@@ -73,17 +77,20 @@ Get the latest version of Spectra Studio for your platform:
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/dsxksss/spectra-studio.git
    cd spectra-studio
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
 
 3. **Run in development mode**
+
    ```bash
    pnpm tauri dev
    ```
