@@ -18,7 +18,7 @@ import {
     SQLiteIcon
 } from "./icons";
 import { Tooltip } from "./Tooltip";
-import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import DatabaseManager from "./DatabaseManager";
 import RedisManager from "./RedisManager";
@@ -76,16 +76,40 @@ export default function FloatingApp() {
     const [bgOpacity, setBgOpacity] = useState(1);
     const bgTransitionRef = useRef(false);
 
-    const [isPinned, setIsPinned] = useState(false);
+    const [isPinned, setIsPinned] = useState(true);
 
     const togglePin = async () => {
         try {
             const newState = !isPinned;
             setIsPinned(newState);
+            await invoke('set_pinned', { pinned: newState });
             await getCurrentWindow().setAlwaysOnTop(newState);
         } catch (e) {
             console.error("Failed to toggle pin:", e);
         }
+    };
+
+    const handleDisconnect = async () => {
+        if (connectedService) {
+            const serviceType = connectedService;
+            const commandMap: Record<string, string> = {
+                'Redis': 'disconnect_redis',
+                'PostgreSQL': 'disconnect_postgres',
+                'MySQL': 'disconnect_mysql',
+                'MongoDB': 'disconnect_mongodb',
+                'SQLite': 'disconnect_sqlite'
+            };
+
+            const command = commandMap[serviceType];
+            if (command) {
+                try {
+                    await invoke(command);
+                } catch (e) {
+                    console.error(`Failed to disconnect from ${serviceType}:`, e);
+                }
+            }
+        }
+        setConnectedService(null);
     };
 
     useEffect(() => {
@@ -202,7 +226,7 @@ export default function FloatingApp() {
                     0, // unused height
                     layoutAlign.x, // unused alignX
                     layoutAlign.y, // unused alignY
-                    (w, h) => {
+                    (w: number, h: number) => {
                         setCurrentUiSize(prev => ({ ...prev, w, h }));
                         // Persist the size for next expansion
                         if (UI_SIZES.expanded) {
@@ -232,89 +256,60 @@ export default function FloatingApp() {
         if (service) {
             setPreselectedService(service);
         } else {
-            // If going back to toolbar, maybe clear it? Not strictly necessary but good for cleanup
             if (targetMode === 'toolbar') setPreselectedService(null);
         }
 
         isAnimatingRef.current = true;
-
-        // 1. Fade out current content
         setContentOpacity(0);
 
-        // If collapsing, hide background IMMEDIATELY to prevent glitch during resize
         if (targetMode !== 'expanded') {
             setShowBackground(false);
         }
 
-        await new Promise(r => setTimeout(r, 150)); // Wait for fade out
+        await new Promise(r => setTimeout(r, 150));
 
         try {
             const appWindow = getCurrentWindow();
             const factor = await appWindow.scaleFactor();
-            const currentOuterPos = await appWindow.outerPosition();
+            const physPos = await appWindow.outerPosition();
+            const currentPos = { x: physPos.x / factor, y: physPos.y / factor };
             const currentSize = UI_SIZES[viewMode];
-            const targetSize = UI_SIZES[targetMode];
+            const targetSize = { ...UI_SIZES[targetMode] };
 
             const workArea = await invoke<[number, number, number, number]>('get_screen_work_area');
             const [waX, waY, waW, waH] = workArea;
 
-            // Current Physical Bounds
-            const curPhysW = currentSize.w * factor;
-            const curPhysH = currentSize.h * factor;
-
-            // Target Physical Bounds (Clamped)
-            let targetPhysW = targetSize.w * factor;
-            let targetPhysH = targetSize.h * factor;
-
             if (targetMode === 'expanded') {
-                targetPhysW = Math.min(targetPhysW, waW);
-                targetPhysH = Math.min(targetPhysH, waH);
-                // Update logical target size for state
-                targetSize.w = targetPhysW / factor;
-                targetSize.h = targetPhysH / factor;
+                targetSize.w = Math.min(targetSize.w, waW * 0.95);
+                targetSize.h = Math.min(targetSize.h, waH * 0.95);
             }
 
-            // 2. Calculate Anchor Point based on CURRENT layout alignment
-            // The anchor point is the corner that should remain stationary during resize
-            // For a floating widget at bottom-right, this is the bottom-right corner
-            let anchorX = currentOuterPos.x;
-            let anchorY = currentOuterPos.y;
+            // 2. Calculate Anchor Point (Logical)
+            let anchorX = currentPos.x;
+            let anchorY = currentPos.y;
 
-            if (layoutAlign.x === 'end') {
-                anchorX = currentOuterPos.x + curPhysW; // Right edge
-            }
-            if (layoutAlign.y === 'end') {
-                anchorY = currentOuterPos.y + curPhysH; // Bottom edge
-            }
+            if (layoutAlign.x === 'end') anchorX += currentSize.w;
+            if (layoutAlign.y === 'end') anchorY += currentSize.h;
 
-            // 3. Keep the original alignment when expanding
+            // 3. Keep original alignment
             const nextAlignX = layoutAlign.x;
             const nextAlignY = layoutAlign.y;
 
-            // 4. Calculate Target Window Position (Top-Left)
-            // If aligned to 'end', the window should expand towards the left/top
-            // so we subtract the target size from the anchor point
+            // 4. Calculate Target Window Position (Logical)
             let targetWinX = anchorX;
             let targetWinY = anchorY;
 
-            if (nextAlignX === 'end') {
-                targetWinX = anchorX - targetPhysW;
-            }
-            if (nextAlignY === 'end') {
-                targetWinY = anchorY - targetPhysH;
-            }
+            if (nextAlignX === 'end') targetWinX -= targetSize.w;
+            if (nextAlignY === 'end') targetWinY -= targetSize.h;
 
-            // Boundary Check: Ensure we don't push off-screen
+            // Boundary Check
             if (targetWinX < waX) targetWinX = waX;
             if (targetWinY < waY) targetWinY = waY;
-            if (targetWinX + targetPhysW > waX + waW) targetWinX = waX + waW - targetPhysW;
-            if (targetWinY + targetPhysH > waY + waH) targetWinY = waY + waH - targetPhysH;
+            if (targetWinX + targetSize.w > waX + waW) targetWinX = waX + waW - targetSize.w;
+            if (targetWinY + targetSize.h > waY + waH) targetWinY = waY + waH - targetSize.h;
 
-            // 5. Apply Position and Size
-            // Set position FIRST to anchor it, then size.
-            await appWindow.setPosition(new PhysicalPosition(Math.round(targetWinX), Math.round(targetWinY)));
-
-            // Use update_click_region for size to ensure backend consistency (or just use setSize)
+            // 5. Apply
+            await appWindow.setPosition(new LogicalPosition(targetWinX, targetWinY));
             await invoke('update_click_region', {
                 width: targetSize.w,
                 height: targetSize.h,
@@ -323,10 +318,10 @@ export default function FloatingApp() {
             });
 
             // Update State
+            setCurrentUiSize(targetSize);
             setLayoutAlign({ x: nextAlignX, y: nextAlignY });
             setViewMode(targetMode);
             setVisibleContent(targetMode);
-            setCurrentUiSize(targetSize);
 
             if (targetMode === 'expanded') {
                 setShowBackground(true);
@@ -420,14 +415,14 @@ export default function FloatingApp() {
                             {connectedService === 'Redis' ? (
                                 <RedisManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onDisconnect={() => setConnectedService(null)}
+                                    onDisconnect={handleDisconnect}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
                                 />
                             ) : connectedService === 'MySQL' ? (
                                 <MySQLManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onDisconnect={() => setConnectedService(null)}
+                                    onDisconnect={handleDisconnect}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
                                     config={connectionConfig}
@@ -435,14 +430,14 @@ export default function FloatingApp() {
                             ) : connectedService === 'SQLite' ? (
                                 <SQLiteManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onDisconnect={() => setConnectedService(null)}
+                                    onDisconnect={handleDisconnect}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
                                 />
                             ) : connectedService ? (
                                 <PostgresManager
                                     onClose={() => handleChangeMode('toolbar')}
-                                    onDisconnect={() => setConnectedService(null)}
+                                    onDisconnect={handleDisconnect}
                                     onDragStart={handleDragStart}
                                     connectionName={currentConnectionName}
                                     config={connectionConfig}

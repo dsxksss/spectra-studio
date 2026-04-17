@@ -1162,10 +1162,17 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                         <span>{isConnecting ? t('loading') : t('test_connection')}</span>
                     </motion.button>
                     <motion.button
-                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(22, 163, 74, 1)' }}
+                        whileHover={{ 
+                            scale: 1.02, 
+                            backgroundColor: editingId ? 'rgba(217, 119, 6, 1)' : 'rgba(22, 163, 74, 1)' 
+                        }}
                         whileTap={{ scale: 0.98 }}
                         onClick={saveConnection}
-                        className="flex items-center gap-2 px-8 py-3 rounded-xl text-white bg-green-600 border border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)] transition-all font-medium text-sm"
+                        className={`flex items-center gap-2 px-8 py-3 rounded-xl text-white border transition-all font-medium text-sm ${
+                            editingId 
+                            ? 'bg-amber-600 border-amber-500/50 shadow-[0_4px_20px_rgba(217,119,6,0.3)] hover:shadow-[0_6px_25px_rgba(217,119,6,0.4)]' 
+                            : 'bg-green-600 border-green-500/50 shadow-[0_4px_20px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_25px_rgba(22,163,74,0.4)]'
+                        }`}
                     >
                         <Save size={18} />
                         <span>{editingId ? t('update') : t('save')}</span>

@@ -14,13 +14,18 @@
   <img src="https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite" alt="Vite" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
-</p>
 
 ---
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
 **Spectra Studio** is a modern database management tool that combines native performance with a premium, glassmorphism-inspired user interface. Designed to be lightweight and fast, it provides a seamless experience for managing your data across multiple database engines.
+
+## 📸 Screenshots
+
+| New Connection | Data Explorer |
+| :---: | :---: |
+| ![Connection](docs/connectd.png) | ![Explorer](docs/home.png) |
 
 ## 📥 Download
 
@@ -57,11 +62,6 @@ Get the latest version of Spectra Studio for your platform:
 - **SQL Console**: Powerful editor for running custom queries and viewing results in real-time.
 - **I18n**: Fully localized in English and Chinese.
 
-## 📸 Screenshots
-
-| New Connection | Data Explorer |
-| :---: | :---: |
-| ![Connection](docs/connectd.png) | ![Explorer](docs/home.png) |
 
 ## 🚀 Getting Started
 

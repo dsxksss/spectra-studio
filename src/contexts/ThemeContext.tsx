@@ -52,7 +52,7 @@ const defaultSettings: ThemeSettings = {
     autoFollowDatabase: true,
     presetColorId: 'default',
     customColor: '#364774',
-    isStaticBackground: false,
+    isStaticBackground: true,
     staticBackgroundColor: '#1b1e27'
 };
 

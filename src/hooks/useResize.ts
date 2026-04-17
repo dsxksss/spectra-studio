@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalPosition, LogicalSize } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 
 export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
@@ -11,7 +11,6 @@ interface ResizeState {
     startWinY: number;
     startWidth: number;
     startHeight: number;
-    factor: number;
     corner: ResizeCorner;
     workArea: { x: number; y: number; w: number; h: number };
     lastW?: number;
@@ -33,18 +32,14 @@ export function useResize(minWidth = 1200, minHeight = 800) {
         const {
             startX, startY, startWinX, startWinY,
             startWidth, startHeight,
-            factor, corner, workArea: _workArea
+            corner
         } = resizeState.current;
 
         const currentX = mousePos.current.x;
         const currentY = mousePos.current.y;
 
-        // Calculate delta (assuming mouse pixels match screen pixels)
-        // Usually, screenX/Y are logical or physical depending on OS, 
-        // but let's assume raw delta needs scaling if we work in physical coordinates.
-        // Actually, if we compare screen-to-screen, standard delta is fine.
-        const deltaX = (currentX - startX) * factor;
-        const deltaY = (currentY - startY) * factor;
+        const deltaX = (currentX - startX);
+        const deltaY = (currentY - startY);
 
         let newX = startWinX;
         let newY = startWinY;
@@ -75,40 +70,36 @@ export function useResize(minWidth = 1200, minHeight = 800) {
                 break;
         }
 
-        // Min Size Constraints (Physical Pixels)
-        const minW = minWidth * factor;
-        const minH = minHeight * factor;
-
-        if (newWidth < minW) {
-            if (corner === 'sw' || corner === 'nw') newX = startWinX + (startWidth - minW);
-            newWidth = minW;
+        // Min Size Constraints (Logical Units)
+        if (newWidth < minWidth) {
+            if (corner === 'sw' || corner === 'nw') newX = startWinX + (startWidth - minWidth);
+            newWidth = minWidth;
         }
-        if (newHeight < minH) {
-            if (corner === 'ne' || corner === 'nw') newY = startWinY + (startHeight - minH);
-            newHeight = minH;
+        if (newHeight < minHeight) {
+            if (corner === 'ne' || corner === 'nw') newY = startWinY + (startHeight - minHeight);
+            newHeight = minHeight;
         }
 
         // Apply to window
         try {
             const appWindow = getCurrentWindow();
-            // Apply to window atomically-ish
             await Promise.all([
-                appWindow.setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY))),
-                appWindow.setSize(new PhysicalSize(Math.round(newWidth), Math.round(newHeight)))
+                appWindow.setPosition(new LogicalPosition(newX, newY)),
+                appWindow.setSize(new LogicalSize(newWidth, newHeight))
             ]);
 
-            // Sync click region - fire and forget
+            // Sync click region
             invoke('update_click_region', {
-                width: newWidth / factor,
-                height: newHeight / factor,
+                width: newWidth,
+                height: newHeight,
                 alignX: 'start',
                 alignY: 'start'
             }).catch(() => { });
 
-            // Update current state for the "End" handler to use the latest values
+            // Update current state
             if (resizeState.current) {
-                resizeState.current.lastW = newWidth / factor;
-                resizeState.current.lastH = newHeight / factor;
+                resizeState.current.lastW = newWidth;
+                resizeState.current.lastH = newHeight;
             }
 
         } catch (e) {
@@ -165,9 +156,10 @@ export function useResize(minWidth = 1200, minHeight = 800) {
         const appWindow = getCurrentWindow();
         try {
             const factor = await appWindow.scaleFactor();
-            const outerPos = await appWindow.outerPosition();
+            const physPos = await appWindow.outerPosition();
+            const logPos = { x: physPos.x / factor, y: physPos.y / factor };
             const innerSize = await appWindow.innerSize();
-            // const wa = await invoke<[number, number, number, number]>('get_screen_work_area'); // Removed unused
+            const logSize = { w: innerSize.width / factor, h: innerSize.height / factor };
 
             isResizing.current = true;
             onResizeEndRef.current = onResizeEnd;
@@ -176,15 +168,14 @@ export function useResize(minWidth = 1200, minHeight = 800) {
             resizeState.current = {
                 startX: e.screenX,
                 startY: e.screenY,
-                startWinX: outerPos.x,
-                startWinY: outerPos.y,
-                startWidth: innerSize.width,
-                startHeight: innerSize.height,
-                factor,
+                startWinX: logPos.x,
+                startWinY: logPos.y,
+                startWidth: logSize.w,
+                startHeight: logSize.h,
                 corner,
-                workArea: { x: 0, y: 0, w: 0, h: 0 }, // unused
-                lastW: innerSize.width / factor,
-                lastH: innerSize.height / factor
+                workArea: { x: 0, y: 0, w: 0, h: 0 },
+                lastW: logSize.w,
+                lastH: logSize.h
             };
 
             window.addEventListener('pointermove', handlePointerMove);

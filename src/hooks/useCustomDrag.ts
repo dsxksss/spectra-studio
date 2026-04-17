@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalPosition } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 
 
@@ -56,7 +56,7 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
             const currentX = startX + (endX - startX) * ease;
             const currentY = startY + (endY - startY) * ease;
 
-            appWindow.setPosition(new PhysicalPosition(Math.round(currentX), Math.round(currentY)))
+            appWindow.setPosition(new LogicalPosition(currentX, currentY))
                 .catch(() => { });
 
             if (progress < 1) {
@@ -149,39 +149,30 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const {
             startX, startY, winStartX, winStartY,
             allMonitors,
-            factor, widgetW: currentWidgetW, widgetH: currentWidgetH
+            widgetW: currentWidgetW, widgetH: currentWidgetH
         } = dragState.current;
 
         const currentX = mousePos.current.x;
         const currentY = mousePos.current.y;
 
-        const deltaX = (currentX - startX) * factor;
-        const deltaY = (currentY - startY) * factor;
+        const deltaX = (currentX - startX);
+        const deltaY = (currentY - startY);
 
         if (!hasDragged.current && (Math.abs(currentX - startX) > DRAG_THRESHOLD || Math.abs(currentY - startY) > DRAG_THRESHOLD)) {
             hasDragged.current = true;
         }
 
-        let newX = winStartX + deltaX;
-        let newY = winStartY + deltaY;
+        let newLogX = winStartX + deltaX;
+        let newLogY = winStartY + deltaY;
 
-        // Calculate physical dimensions for overshoot detection
-        const wPhys = currentWidgetW * factor;
-        const hPhys = currentWidgetH * factor;
-
-        // With the new architecture, the window size exactly matches the widget size.
-        // So the visual top-left is simply the window's position (newX, newY).
-        const visualLeft = newX;
-        const visualTop = newY;
-
-        // Intelligent Damping
-        const overshoot = calculateOvershoot(visualLeft, visualTop, wPhys, hPhys, allMonitors);
-        newX += overshoot.dx * DAMPING_FACTOR;
-        newY += overshoot.dy * DAMPING_FACTOR;
+        // Intelligent Damping (already in logical units because wa is logical)
+        const overshoot = calculateOvershoot(newLogX, newLogY, currentWidgetW, currentWidgetH, allMonitors);
+        newLogX += overshoot.dx * DAMPING_FACTOR;
+        newLogY += overshoot.dy * DAMPING_FACTOR;
 
         isBusy.current = true;
         try {
-            await getCurrentWindow().setPosition(new PhysicalPosition(Math.round(newX), Math.round(newY)));
+            await getCurrentWindow().setPosition(new LogicalPosition(newLogX, newLogY));
         } catch (e) {
             // ignore
         } finally {
@@ -220,24 +211,20 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         dragState.current = null; // Clear state
 
         const appWindow = getCurrentWindow();
-        const currentPos = await appWindow.outerPosition();
+        const factor = await appWindow.scaleFactor(); // Still need factor to convert current physical to logical
+        const physPos = await appWindow.outerPosition();
+        const currentLogPos = { x: physPos.x / factor, y: physPos.y / factor };
 
         // Calculate Snap Targets
-        let targetX = currentPos.x;
-        let targetY = currentPos.y;
+        let targetX = currentLogPos.x;
+        let targetY = currentLogPos.y;
 
-        const { factor, allMonitors, widgetW: wW, widgetH: wH } = state;
-        const winPhysW = wW * factor;
-        const winPhysH = wH * factor;
+        const { allMonitors, widgetW: wW, widgetH: wH } = state;
 
-        // Visual position IS the window position now
-        const vLeft = targetX;
-        const vTop = targetY;
-
-        const overshoot = calculateOvershoot(vLeft, vTop, winPhysW, winPhysH, allMonitors);
+        const overshoot = calculateOvershoot(targetX, targetY, wW, wH, allMonitors);
 
         if (Math.abs(overshoot.dx) > 1 || Math.abs(overshoot.dy) > 1) {
-            animateTo(currentPos.x, currentPos.y, currentPos.x + overshoot.dx, currentPos.y + overshoot.dy);
+            animateTo(targetX, targetY, targetX + overshoot.dx, targetY + overshoot.dy);
         }
 
     }, [handlePointerMove, animateTo]);
@@ -263,11 +250,10 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
         const appWindow = getCurrentWindow();
         try {
             const factor = await appWindow.scaleFactor();
-            // Fetch ALL monitor work areas for intelligent boundary detection
             const monitorData = await invoke<[number, number, number, number][]>('get_all_monitors_work_area');
             const allMonitors = monitorData.map(([x, y, w, h]) => ({ x, y, w, h }));
-
-            const outerPos = await appWindow.outerPosition();
+            const physPos = await appWindow.outerPosition();
+            const logPos = { x: physPos.x / factor, y: physPos.y / factor };
 
             isDragging.current = true;
             mousePos.current = { x: e.screenX, y: e.screenY };
@@ -275,8 +261,8 @@ export function useCustomDrag(widgetW: number, widgetH: number, alignX: 'start' 
             dragState.current = {
                 startX: e.screenX,
                 startY: e.screenY,
-                winStartX: outerPos.x,
-                winStartY: outerPos.y,
+                winStartX: logPos.x,
+                winStartY: logPos.y,
                 allMonitors,
                 factor,
                 widgetW,
