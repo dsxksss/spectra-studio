@@ -196,8 +196,8 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
             }
         } catch (err: any) {
             console.error("Failed to fetch keys", err);
-            setError(typeof err === 'string' ? err : "Failed to fetch keys.");
-            showToast("Failed to fetch keys", 'error');
+            setError(typeof err === 'string' ? err : t('fetch_keys_failed'));
+            showToast(t('fetch_keys_failed'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -228,8 +228,8 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
             }
         } catch (err) {
             console.error(err);
-            setKeyValue("Error loading data");
-            showToast("Error loading data", 'error');
+            setKeyValue(t('error_loading_data'));
+            showToast(t('error_loading_data'), 'error');
             setParsedData([]);
         } finally {
             setIsLoading(false);
@@ -352,7 +352,7 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
             onConfirm: async () => {
                 try {
                     await invoke('redis_del_key', { key });
-                    showToast(`Key "${key}" deleted`, 'success');
+                    showToast(t('key_deleted_success').replace('{{key}}', key), 'success');
                     if (selectedKey === key) {
                         setSelectedKey(null);
                     }
@@ -368,7 +368,7 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
 
     const handleCreateKey = async () => {
         if (!newKeyData.name) {
-            showToast("Key name is required", 'error');
+            showToast(t('key_name_required'), 'error');
             return;
         }
         setIsLoading(true);
@@ -386,7 +386,7 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
             }
 
             await invoke('redis_set_value', { key: newKeyData.name, value: val });
-            showToast(`Key "${newKeyData.name}" created`, 'success');
+            showToast(t('key_created_success').replace('{{key}}', newKeyData.name), 'success');
             setIsCreatingKey(false);
             setNewKeyData({ name: '', type: 'string', value: '' });
             fetchKeys();
@@ -408,7 +408,7 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
         setIsLoading(true);
         try {
             await invoke('redis_rename_key', { oldKey, newKey });
-            showToast(`Key renamed to ${newKey}`, 'success');
+            showToast(t('key_renamed_success').replace('{{newName}}', newKey), 'success');
             // Fetch keys first, then set the new selected key
             const res = await invoke<string[]>('redis_get_keys', { pattern: '*' });
             setKeys(res.sort());
@@ -461,14 +461,14 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
             }
 
             await invoke('redis_set_value', { key: selectedKey, value: valueToSave });
-            showToast("Value updated successfully", 'success');
+            showToast(t('value_updated_success'), 'success');
             setParsedData(data);
             setKeyValue(valueToSave);
             setPendingChanges({}); // Clear changes as structure changed
             setEditHistory([]);
         } catch (err: any) {
             console.error("Save failed", err);
-            showToast("Save failed: " + err, 'error');
+            showToast(t('save_failed') + ": " + err, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -548,13 +548,13 @@ export default function RedisManager({ onClose: _onClose, onDisconnect, onDragSt
                 setKeyValue(valueToSave);
             }
 
-            showToast("Saved successfully", 'success');
+            showToast(t('save_success'), 'success');
             setNewRows([]);
             setPendingChanges({});
             setEditHistory([]);
         } catch (err: any) {
             console.error("Save failed", err);
-            showToast("Save failed: " + err, 'error');
+            showToast(t('save_failed') + ": " + err, 'error');
         } finally {
             setIsSaving(false);
         }

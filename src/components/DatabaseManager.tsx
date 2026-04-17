@@ -76,6 +76,7 @@ type SavedConnection = {
 };
 
 const ConnectionHoverCard = ({ connection, rect }: { connection: SavedConnection, rect: DOMRect }) => {
+    const { t } = useTranslation();
     if (!rect) return null;
 
     const top = rect.top;
@@ -143,7 +144,7 @@ const ConnectionHoverCard = ({ connection, rect }: { connection: SavedConnection
                 {connection.ssh?.enabled && (
                     <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-2 text-[10px] text-blue-400 relative z-10">
                         <Shield size={12} />
-                        <span className="font-mono uppercase tracking-wider">SSH Tunnel Active</span>
+                        <span className="font-mono uppercase tracking-wider">{t('ssh_tunnel_active')}</span>
                     </div>
                 )}
             </motion.div>
@@ -298,7 +299,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
     const [showPassword, setShowPassword] = useState(false);
 
     // Form State
-    const [connectionName, setConnectionName] = useState('New Connection');
+    const [connectionName, setConnectionName] = useState(t('new_connection_default'));
     const [isCustomName, setIsCustomName] = useState(false);
     const [host, setHost] = useState('localhost');
     const [port, setPort] = useState('5432');
@@ -347,7 +348,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                 if (parsed.timeout) setTimeoutSec(parsed.timeout);
             } catch (e) {
                 console.error("Failed to parse settings", e);
-                showToast("Failed to load settings", 'error');
+                showToast(t('settings_load_failed'), 'error');
             }
         }
     }, []);
@@ -355,7 +356,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
     const saveSettings = () => {
         const settings = { timeout: timeoutSec };
         localStorage.setItem('spectra_settings', JSON.stringify(settings));
-        showToast('Settings Saved', 'success');
+        showToast(t('settings_save_success'), 'success');
         setShowSettings(false);
     };
 
@@ -381,7 +382,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                 setSavedConnections(JSON.parse(saved));
             } catch (e) {
                 console.error("Failed to parse saved connections", e);
-                showToast("Failed to load saved connections", 'error');
+                showToast(t('connections_load_failed'), 'error');
             }
         }
     }, []);
@@ -390,7 +391,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
 
     const handleCreateNew = () => {
         setEditingId(null);
-        setConnectionName('New Connection');
+        setConnectionName(t('new_connection_default'));
         setHost('localhost');
         setPort('5432');
         setUsername('');
@@ -427,11 +428,11 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         let newConnections;
         if (editingId) {
             newConnections = savedConnections.map(c => c.id === editingId ? newConnection : c);
-            showToast('Connection Updated', 'success');
+            showToast(t('connection_updated_success'), 'success');
         } else {
             newConnections = [...savedConnections, newConnection];
             setEditingId(newConnection.id); // Switch to editing the newly created one
-            showToast('Connection Created', 'success');
+            showToast(t('connection_created_success'), 'success');
         }
 
         setSavedConnections(newConnections);
@@ -561,7 +562,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
         const updated = savedConnections.filter(c => c.id !== conn.id);
         setSavedConnections(updated);
         localStorage.setItem('spectra_saved_connections', JSON.stringify(updated));
-        showToast('Connection deleted', 'success');
+        showToast(t('connection_deleted_success'), 'success');
     };
 
     const performConnect = async (service: string, hostStr: string, portStr: string, passStr: string, usernameStr: string, dbNameStr: string, isTestOnly: boolean = false, nameOverride?: string, sshConfigOverride?: any) => {
@@ -645,7 +646,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
             }
 
             console.log(res);
-            showToast(`${service} Connection Successful`, 'success');
+            showToast(t('connection_success_service').replace('{{service}}', service), 'success');
             if (!isTestOnly && onConnect) {
                 const config = {
                     host: hostStr,
@@ -660,7 +661,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
             }
         } catch (err: any) {
             console.error(`${service} Connection Failed:`, err);
-            showToast(`Connection Failed: ${err}`, 'error');
+            showToast(t('connection_failed_err').replace('{{err}}', String(err)), 'error');
         } finally {
             setIsConnecting(false);
             setConnectingInfo(null);
@@ -877,7 +878,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                             <div className="absolute w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
                             <div className="absolute w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75"></div>
                         </div>
-                        <span className="font-medium tracking-wide">{appVersion} Stable</span>
+                        <span className="font-medium tracking-wide">{appVersion} {t('stable')}</span>
                     </div>
                     <Tooltip content={t('settings')} position="right">
                         <button
@@ -924,7 +925,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                 ) : t('new_connection')}
                             </h1>
                             <p className="text-gray-400 text-sm flex items-center gap-2">
-                                {editingId ? 'Modify existing configuration' : t('configure_connection')}
+                                {editingId ? t('modify_config') : t('configure_connection')}
                                 <span className="w-1 h-1 rounded-full bg-gray-600" />
                                 <span className="text-gray-500 text-xs">{t('secure_env')}</span>
                             </p>
@@ -1119,14 +1120,14 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                             </div>
 
                             {selectedService === 'Redis' && (
-                                <InputField label="Database Index" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="0" />
+                                <InputField label={t('database_index')} value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="0" />
                             )}
                             {(selectedService === 'PostgreSQL' || selectedService === 'MySQL') && (
                                 <InputField label={t('database')} value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="public" />
                             )}
                             {selectedService === 'MongoDB' && (
                                 <div className="grid grid-cols-2 gap-4">
-                                    <InputField label="Auth Database" value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="admin" />
+                                    <InputField label={t('auth_database')} value={dbName} onChange={(e: any) => setDbName(e.target.value)} placeholder="admin" />
                                 </div>
                             )}
                         </motion.div>
@@ -1258,7 +1259,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
                                 transition={{ delay: 1 }}
                                 className="absolute bottom-12 text-[10px] text-gray-600 font-mono tracking-wider italic"
                             >
-                                This may take a few seconds depending on your network...
+                                {t('connection_taking_long')}
                             </motion.div>
                         </motion.div>
                     )}
@@ -1507,7 +1508,7 @@ export default function DatabaseManager({ onConnect, activeService, onDragStart 
 
                                             <div className="space-y-2.5">
                                                 <div className="flex justify-between text-sm text-gray-300">
-                                                    <span>{language === 'zh' ? '连接超时' : 'Connection Timeout'}</span>
+                                                    <span>{t('connection_timeout')}</span>
                                                     <span className="font-mono text-blue-400">{timeoutSec}s</span>
                                                 </div>
                                                 <input

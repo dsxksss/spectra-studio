@@ -190,7 +190,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             for (const row of newRows) {
                 await invoke('mysql_insert_row', { tableName: selectedKey, data: row });
             }
-            showToast(`Successfully inserted ${newRows.length} rows.`, 'success');
+            showToast(t('rows_inserted_success').replace('{{count}}', String(newRows.length)), 'success');
             setNewRows([]);
             if (selectedKey) fetchTableData(selectedKey, page);
         } catch (err: any) {
@@ -204,7 +204,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
 
     const handleDeleteRow = async (rowIndex: number) => {
         if (!selectedKey || !primaryKey) {
-            showToast("Primary key required to delete row", 'error');
+            showToast(t('pk_required_to_delete'), 'error');
             return;
         }
         const row = tableData[rowIndex];
@@ -219,7 +219,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             onConfirm: async () => {
                 try {
                     await invoke('mysql_delete_row', { tableName: selectedKey, pkCol: primaryKey, pkVal: String(pkVal) });
-                    showToast("Row deleted successfully", 'success');
+                    showToast(t('row_deleted_success'), 'success');
                     fetchTableData(selectedKey, page);
                     fetchCount(selectedKey);
                 } catch (err: any) {
@@ -241,7 +241,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             onConfirm: async () => {
                 try {
                     await invoke('mysql_drop_table', { tableName });
-                    showToast(`Table "${tableName}" dropped`, 'success');
+                    showToast(t('table_dropped_success').replace('{{tableName}}', tableName), 'success');
                     if (selectedKey === tableName) {
                         setSelectedKey(null);
                     }
@@ -343,8 +343,8 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             }
         } catch (err: any) {
             console.error("Failed to fetch databases", err);
-            setError(typeof err === 'string' ? err : "Failed to fetch databases.");
-            showToast("Failed to fetch databases", 'error');
+            setError(typeof err === 'string' ? err : t('fetch_databases_failed'));
+            showToast(t('fetch_databases_failed'), 'error');
         }
     };
 
@@ -389,7 +389,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             setExpandedFolders(prev => new Set([...prev, `${db}:tables`]));
         } catch (err: any) {
             console.error(`Failed to fetch schema for ${db}`, err);
-            showToast(`Failed to load schema for ${db}`, 'error');
+            showToast(t('switch_db_failed').replace('{{db}}', db).replace('{{err}}', String(err)), 'error');
         }
     };
 
@@ -454,8 +454,8 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
-            setError(typeof err === 'string' ? err : "Failed to fetch tables.");
-            showToast("Failed to fetch tables", 'error');
+            setError(typeof err === 'string' ? err : t('fetch_tables_failed'));
+            showToast(t('fetch_tables_failed'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -469,8 +469,8 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             setKeyValue(`[${res.join(',')}]`);
         } catch (err) {
             console.error(err);
-            setKeyValue("Error loading data");
-            showToast("Error loading data", 'error');
+            setKeyValue(t('error_loading_data'));
+            showToast(t('error_loading_data'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -651,7 +651,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
         }
 
         if (updates.length === 0) {
-            showToast("No actual changes to save.", 'info');
+            showToast(t('no_changes_to_save'), 'info');
             setPendingChanges({});
             setEditHistory([]); // Clear history
             return;
@@ -684,7 +684,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             const totalRowsAffected = results.reduce((sum, current) => sum + current, 0);
 
             if (totalRowsAffected > 0) {
-                showToast(`Successfully saved ${totalRowsAffected} changes.`, 'success');
+                showToast(t('changes_saved_success').replace('{{count}}', String(totalRowsAffected)), 'success');
 
                 const newData = [...tableData];
                 Object.entries(pendingChanges).forEach(([idxStr, colChanges]) => {
@@ -695,14 +695,14 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
                 });
                 setKeyValue(JSON.stringify(newData));
             } else {
-                showToast("No rows were affected by the update.", 'info');
+                showToast(t('no_rows_affected'), 'info');
             }
 
             setPendingChanges({});
             setEditHistory([]); // Clear history
         } catch (err: any) {
             console.error("Batch update failed", err);
-            showToast("Some updates failed. Check console.", 'error');
+            showToast(t('update_failed'), 'error');
         } finally {
             setIsSaving(false);
         }
@@ -732,7 +732,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
         setIsLoading(true);
         try {
             await invoke('mysql_rename_table', { oldName, newName });
-            showToast(`Table renamed to ${newName}`, 'success');
+            showToast(t('table_renamed_success').replace('{{newName}}', newName), 'success');
             // Fetch keys first, then set the new selected key
             const res = await invoke<string[]>('mysql_get_tables');
             setKeys(res.sort());
@@ -757,7 +757,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
                 const parsed = JSON.parse(res);
                 if (Array.isArray(parsed)) {
                     setSqlResults(parsed);
-                    showToast("Query executed successfully", 'success');
+                    showToast(t('query_executed_success'), 'success');
                 } else {
                     setSqlResults([]);
                     showToast(res, 'success');
@@ -768,7 +768,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
             }
         } catch (err: any) {
             setSqlError(err);
-            showToast("Execution failed", 'error');
+            showToast(t('execution_failed'), 'error');
         } finally {
             setIsExecutingSql(false);
         }
@@ -776,7 +776,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
 
     const handleCreateTable = async () => {
         if (!newTableName.trim()) {
-            showToast("Table name is required", 'error');
+            showToast(t('table_name_required'), 'error');
             return;
         }
 
@@ -789,7 +789,7 @@ export default function MySQLManager({ onDisconnect, onDragStart, connectionName
         setIsCreatingTable(true);
         try {
             await invoke('mysql_execute_raw', { sql });
-            showToast(`Table "${newTableName}" created`, 'success');
+            showToast(t('table_created_success').replace('{{tableName}}', newTableName), 'success');
             setNewTableName("");
             setNewTableCols([{ name: 'id', type: 'INT', isPk: true, isNullable: false }]);
             setActiveView('browser');

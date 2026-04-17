@@ -177,7 +177,7 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
 
     const handleDeleteRow = async (rowIndex: number) => {
         if (!selectedKey || !primaryKey) {
-            showToast("Primary key required to delete row", 'error');
+            showToast(t('pk_required_to_delete'), 'error');
             return;
         }
         const row = tableData[rowIndex];
@@ -302,8 +302,8 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
             }
         } catch (err: any) {
             console.error("Failed to fetch tables", err);
-            setError(typeof err === 'string' ? err : "Failed to fetch tables.");
-            showToast("Failed to fetch tables", 'error');
+            setError(typeof err === 'string' ? err : t('fetch_tables_failed'));
+            showToast(t('fetch_tables_failed'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -317,8 +317,8 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
             setKeyValue(`[${res.join(',')}]`);
         } catch (err) {
             console.error(err);
-            setKeyValue("Error loading data");
-            showToast("Error loading data", 'error');
+            setKeyValue(t('error_loading_data'));
+            showToast(t('error_loading_data'), 'error');
         } finally {
             setIsLoading(false);
         }
@@ -554,7 +554,7 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
                 });
                 setKeyValue(JSON.stringify(newData));
             } else {
-                showToast("No rows were affected by the update.", 'info');
+                showToast(t('no_rows_affected'), 'info');
             }
 
             setPendingChanges({});
@@ -591,7 +591,7 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
         setIsLoading(true);
         try {
             await invoke('sqlite_rename_table', { oldName, newName });
-            showToast(`Table renamed to ${newName}`, 'success');
+            showToast(t('table_renamed_success').replace('{{newName}}', newName), 'success');
             // Fetch keys first, then set the new selected key
             const res = await invoke<string[]>('sqlite_get_tables');
             setKeys(res.sort());
@@ -627,7 +627,7 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
             }
         } catch (err: any) {
             setSqlError(err);
-            showToast("Execution failed", 'error');
+            showToast(t('execution_failed'), 'error');
         } finally {
             setIsExecutingSql(false);
         }
@@ -635,7 +635,7 @@ export default function SQLiteManager({ onClose: _onClose, onDisconnect, onDragS
 
     const handleCreateTable = async () => {
         if (!newTableName.trim()) {
-            showToast("Table name is required", 'error');
+            showToast(t('table_name_required'), 'error');
             return;
         }
 
