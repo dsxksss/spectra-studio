@@ -34,7 +34,7 @@
 
 | 平台              | 下载链接                                                                                                                                        |
 | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Windows** (x64) | [**Spectra.Studio_0.3.4_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.5/Spectra.Studio_0.3.5_x64-setup.exe) |
+| **Windows** (x64) | [**Spectra.Studio_0.3.5_x64-setup.exe**](https://github.com/dsxksss/spectra-studio/releases/download/v0.3.5/Spectra.Studio_0.3.5_x64-setup.exe) |
 | **macOS / Linux** | 即将推出                                                                                                                                        |
 
 > [!NOTE]
